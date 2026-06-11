@@ -1,0 +1,17 @@
+{
+  "id": "simple-synth",
+  "name": "Simple Synth",
+  "abbrev": "SS",
+  "version": "0.1.0",
+  "description": "Built-in iSchwung test synth (poly saw/square/sine)",
+  "dsp": "dsp.so",
+  "api_version": 2,
+  "capabilities": {
+    "audio_in": false,
+    "audio_out": true,
+    "midi_in": true,
+    "midi_out": false,
+    "chainable": true,
+    "component_type": "sound_generator"
+  }
+}
