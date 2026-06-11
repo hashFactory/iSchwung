@@ -270,21 +270,17 @@
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
-				"OTHER_LDFLAGS[sdk=macosx*]" = "$(SRCROOT)/native/build/libschwungcore.a -framework AudioToolbox";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/native/build/iossim/libschwungcore.a -framework AudioToolbox";
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/native/build/ios/libschwungcore.a -framework AudioToolbox";
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = iSchwung;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "LaunchScreen.storyboard";
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -294,6 +290,21 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(SRCROOT)/native/build/ios/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(SRCROOT)/native/build/iossim/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
+				"OTHER_LDFLAGS[sdk=macosx*]" = (
+					"$(SRCROOT)/native/build/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tristandev.iSchwung;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -304,6 +315,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -321,21 +333,17 @@
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
 				ENABLE_APP_SANDBOX = NO;
 				ENABLE_HARDENED_RUNTIME = NO;
-				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
-				"OTHER_LDFLAGS[sdk=macosx*]" = "$(SRCROOT)/native/build/libschwungcore.a -framework AudioToolbox";
-				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/native/build/iossim/libschwungcore.a -framework AudioToolbox";
-				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/native/build/ios/libschwungcore.a -framework AudioToolbox";
-				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = iSchwung;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchStoryboardName = LaunchScreen;
+				"EXCLUDED_SOURCE_FILE_NAMES[sdk=macosx*]" = "LaunchScreen.storyboard";
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -345,6 +353,21 @@
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
 				MARKETING_VERSION = 1.0;
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = (
+					"$(SRCROOT)/native/build/ios/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = (
+					"$(SRCROOT)/native/build/iossim/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
+				"OTHER_LDFLAGS[sdk=macosx*]" = (
+					"$(SRCROOT)/native/build/libschwungcore.a",
+					"-framework",
+					AudioToolbox,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.tristandev.iSchwung;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -355,6 +378,7 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
