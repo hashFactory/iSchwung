@@ -1,4 +1,6 @@
 import SwiftUI
+import Combine
+import Accelerate
 
 // MARK: - Move control MIDI map (src/shared/constants.mjs)
 
@@ -26,7 +28,7 @@ enum Theme {
     static let body = Color.black
     static let well = Color.black
     static let control = Color(red: 0.10, green: 0.10, blue: 0.11)
-    static let controlBorder = Color.white.opacity(0.22)
+    static let controlBorder = Color.white.opacity(0.42)
     static let label = Color.white.opacity(0.85)
     static let padOff = Color(red: 0.13, green: 0.13, blue: 0.14)
     /// Default track identity colors (Move firmware drives the real LEDs
@@ -46,12 +48,16 @@ struct MoveSurfaceView: View {
 
     var body: some View {
         #if os(macOS)
-        surface
+        surface(overscanX: 0)
         #else
-        // Fixed-layout surface scaled to whatever screen we get (best in landscape)
+        // Fixed-layout surface scaled to whatever screen we get (best in
+        // landscape). overscanX = how far past the surface edge the letterbox
+        // bars run, in unscaled points, so the graph can bleed to the screen edge.
         GeometryReader { geo in
-            surface
-                .scaleEffect(min(geo.size.width / 1180, geo.size.height / 600))
+            let scale = min(geo.size.width / 1180, geo.size.height / 600)
+            let overscanX = max(0, (geo.size.width - 1180 * scale) / (2 * scale))
+            surface(overscanX: overscanX)
+                .scaleEffect(scale)
                 .frame(width: geo.size.width, height: geo.size.height)
         }
         .background(Theme.well)
@@ -60,14 +66,21 @@ struct MoveSurfaceView: View {
         #endif
     }
 
-    private var surface: some View {
-        VStack(spacing: 14) {
+    private func surface(overscanX: CGFloat) -> some View {
+        VStack(spacing: 12) {
             topRow
             middleRow
             bottomRow
+            // Graph rises up behind the bottom controls (d-pad/buttons occlude
+            // its top edge) and bleeds past the padding to the real screen edges:
+            // its 0-line sits on the bottom pixel, full width into the letterbox.
+            IntensityStrip(height: 60)
+                .padding(.top, -34)
+                .padding(.horizontal, -(16 + overscanX))
+                .zIndex(-1)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
         .frame(width: 1180, height: 600)
         .background(Theme.body)
         .overlay(alignment: .bottomLeading) {
@@ -297,7 +310,7 @@ struct PadView: View {
         RoundedRectangle(cornerRadius: 7)
             .fill(fill)
             .overlay(RoundedRectangle(cornerRadius: 7)
-                .strokeBorder(Color.white.opacity(down ? 0.6 : 0.22), lineWidth: 1))
+                .strokeBorder(Color.white.opacity(down ? 0.7 : 0.40), lineWidth: 1))
             .shadow(color: down ? pressColor.opacity(0.8) : (lit ? color.opacity(0.55) : .clear),
                     radius: down ? 10 : 7)
             .frame(minWidth: 56, maxWidth: .infinity, minHeight: 58, maxHeight: .infinity)
@@ -325,7 +338,7 @@ struct StepButton: View {
         RoundedRectangle(cornerRadius: 5)
             .fill(fill)
             .overlay(RoundedRectangle(cornerRadius: 5)
-                .strokeBorder(Color.white.opacity(down ? 0.6 : 0.22), lineWidth: 1))
+                .strokeBorder(Color.white.opacity(down ? 0.7 : 0.40), lineWidth: 1))
             .frame(width: 40, height: 26)
             .gesture(DragGesture(minimumDistance: 0)
                 .onChanged { _ in
@@ -439,6 +452,109 @@ struct StatusLEDs: View {
     }
 }
 
+// MARK: - Intensity graph
+
+/// A continuous 20-second trace of output intensity: a white line whose fill
+/// fades quickly down through gray to transparent black, newest at the right.
+/// One stroked + one filled Path in a `Canvas` (GPU-backed) → essentially free.
+/// Sits behind the bottom controls, which occlude its top edge.
+struct IntensityStrip: View {
+    var height: CGFloat = 30
+    @StateObject private var model = IntensityModel()
+
+    private let fade = Gradient(stops: [
+        .init(color: .white.opacity(0.9), location: 0.0),
+        .init(color: Color(white: 0.5).opacity(0.28), location: 0.18),
+        .init(color: .clear, location: 0.5),
+    ])
+
+    var body: some View {
+        Canvas(rendersAsynchronously: true) { ctx, size in
+            let s = model.samples()           // oldest → newest, 0…1
+            guard s.count > 1 else { return }
+            let dx = size.width / CGFloat(s.count - 1)
+            func pt(_ i: Int) -> CGPoint { CGPoint(x: CGFloat(i) * dx, y: size.height * (1 - CGFloat(s[i]))) }
+
+            // Filled area under the curve, fading from the line down to clear.
+            var area = Path()
+            area.move(to: CGPoint(x: 0, y: size.height))
+            area.addLine(to: pt(0))
+            for i in 1..<s.count { area.addLine(to: pt(i)) }
+            area.addLine(to: CGPoint(x: size.width, y: size.height))
+            area.closeSubpath()
+            ctx.fill(area, with: .linearGradient(fade, startPoint: .zero,
+                                                 endPoint: CGPoint(x: 0, y: size.height)))
+
+            // The bright line itself.
+            var line = Path()
+            line.move(to: pt(0))
+            for i in 1..<s.count { line.addLine(to: pt(i)) }
+            ctx.stroke(line, with: .color(.white.opacity(0.92)),
+                       style: StrokeStyle(lineWidth: 1.1, lineJoin: .round))
+        }
+        .frame(height: height)
+        .frame(maxWidth: .infinity)
+        .background(Color.black)        // no clip: bleeds to the screen edges
+        .onAppear { model.start() }
+        .onDisappear { model.stop() }
+    }
+}
+
+/// Samples output intensity (perceptual RMS of the capture ring) at 60 Hz into a
+/// 20-second ring and bumps `tick` so the Canvas redraws.
+@MainActor
+final class IntensityModel: ObservableObject {
+    @Published private(set) var tick: Int = 0
+
+    private let rate = 60
+    private let seconds = 12
+    private let win = 1024
+    private var ring: [Float]
+    private var w = 0
+    private var smoothed: Float = 0
+    private var buf: [Float]
+    private var timer: Timer?
+
+    init() {
+        ring = [Float](repeating: 0, count: rate * seconds)
+        buf = [Float](repeating: 0, count: win)
+    }
+
+    /// Snapshot of the ring in chronological order (oldest first).
+    func samples() -> [Float] {
+        let n = ring.count
+        var out = [Float](repeating: 0, count: n)
+        for i in 0..<n { out[i] = ring[(w + i) % n] }
+        return out
+    }
+
+    func start() {
+        guard timer == nil else { return }
+        let t = Timer(timeInterval: 1.0 / Double(rate), repeats: true) { [weak self] _ in
+            Task { @MainActor in self?.advance() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    func stop() { timer?.invalidate(); timer = nil }
+
+    private func advance() {
+        var rms: Float = 0
+        let got = buf.withUnsafeMutableBufferPointer {
+            Int(schwung_audio_capture($0.baseAddress, Int32(win)))
+        }
+        if got == win { vDSP_rmsqv(buf, 1, &rms, vDSP_Length(win)) }
+        // Perceptual lift (rms is small) + asymmetric smoothing: snappy rise,
+        // gentle fall, so the line reads as a continuous intensity envelope.
+        let lifted = min(1, sqrtf(rms) * 1.6)
+        smoothed = lifted > smoothed ? lifted : smoothed * 0.85 + lifted * 0.15
+        ring[w] = smoothed
+        w = (w + 1) % ring.count
+        tick &+= 1
+    }
+}
+
 // MARK: - Encoders
 
 /// Relative encoder with a 270° value gauge. When the chain reports the mapped
@@ -467,26 +583,28 @@ struct EncoderKnob: View {
 
         ZStack {
             Circle().fill(Theme.control)
-            Circle().strokeBorder(hovered ? Color.white.opacity(0.55) : Theme.controlBorder,
-                                  lineWidth: 1)
+            Circle().strokeBorder(hovered ? Color.white : Color.white.opacity(0.45),
+                                  lineWidth: 1.25)
             // 270° track + bright value fill, opening at the bottom
             Circle().trim(from: 0, to: 0.75)
-                .stroke(Color.white.opacity(0.10),
+                .stroke(Color.white.opacity(0.16),
                         style: StrokeStyle(lineWidth: arcWidth, lineCap: .round))
                 .rotationEffect(.degrees(135))
                 .padding(arcWidth)
             Circle().trim(from: 0, to: 0.75 * value)
-                .stroke(mapped ? (hovered ? Color.white : Color.white.opacity(0.85))
-                               : Color.white.opacity(0.3),  // dim when not a real value
+                .stroke(mapped ? Color.white : Color.white.opacity(0.6),  // dimmer when not a real value
                         style: StrokeStyle(lineWidth: arcWidth, lineCap: .round))
                 .rotationEffect(.degrees(135))
                 .padding(arcWidth)
-            // position indicator
-            Capsule()
-                .fill(Color.white.opacity(mapped ? 0.95 : 0.5))
-                .frame(width: 2.5, height: size * 0.22)
-                .offset(y: -size * 0.24)
-                .rotationEffect(.degrees(gaugeAngle))
+            // position indicator: a solid white hand from the center to the rim
+            Path { p in
+                p.move(to: CGPoint(x: size / 2, y: size / 2))
+                p.addLine(to: CGPoint(x: size / 2, y: size * 0.08))
+            }
+            .stroke(Color.white.opacity(mapped ? 1.0 : 0.7),
+                    style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(gaugeAngle))
         }
         .frame(width: size, height: size)
         .onHover { inside in
