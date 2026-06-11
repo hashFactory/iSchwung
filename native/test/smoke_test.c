@@ -105,6 +105,34 @@ int main(int argc, char *argv[]) {
         printf("=== audio peak after note: %.4f %s ===\n", peak,
                peak > 0.01f ? "(SOUND!)" : "(silence)");
         test_send_dsp_note(0x80, 60, 0);
+
+        /* === Transport: load euclidrum as MIDI FX, press play, expect the
+         * sequencer to generate notes that drive the synth (peak rises). === */
+        const char *seq = argc > 2 ? argv[2] : "euclidrum";
+        strcpy(p->key, "midi_fx1:module");
+        strncpy(p->value, seq, sizeof(p->value) - 1);
+        p->value[sizeof(p->value) - 1] = '\0';
+        p->slot = 0;
+        p->response_ready = 0;
+        p->error = 0;
+        p->request_id = 9002;
+        p->request_type = 1;
+        for (int i = 0; i < 500 && !(p->response_ready && p->response_id == 9002); i++) {
+            usleep(2000);
+        }
+        printf("=== %s load: ready=%d err=%d ===\n", seq, p->response_ready, p->error);
+
+        printf("=== transport ON ===\n");
+        schwung_set_transport(1);
+        float seqpeak = 0;
+        for (int i = 0; i < 40; i++) {      /* ~2 s, sample peak each 50 ms */
+            usleep(50000);
+            float pk = schwung_audio_peak();
+            if (pk > seqpeak) seqpeak = pk;
+        }
+        printf("=== %s transport peak over 2s: %.4f %s ===\n", seq, seqpeak,
+               seqpeak > 0.01f ? "(GENERATING!)" : "(silent - no notes)");
+        schwung_set_transport(0);
     }
 
     schwung_engine_stop();

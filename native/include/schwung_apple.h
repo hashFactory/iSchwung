@@ -53,9 +53,16 @@ float schwung_audio_peak(void);
 int schwung_selected_slot(void);
 int schwung_slot_active(int slot);
 
+/* Transport: the play button toggles a MIDI clock that drives sequencer MIDI FX
+ * (euclidrum, clock-synced arps). There is no Move sequencer here, so this is
+ * the only clock source. */
+void schwung_set_transport(int playing);
+int schwung_transport_playing(void);
+
 /* Live label the chain has mapped to knob k (0-7): name + formatted value, for
- * the slot currently shown. Returns 1 if mapped (name non-empty), 0 otherwise. */
-int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen);
+ * the slot currently shown. *norm gets the value normalized to [0,1] over its
+ * range, or -1 if unknown. Returns 1 if mapped (name non-empty), 0 otherwise. */
+int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen, float *norm);
 
 #ifdef __cplusplus
 }

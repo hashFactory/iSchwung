@@ -79,9 +79,14 @@ static shadow_overlay_state_t *g_overlay = NULL;
  * host_api_v1_t stub
  * ============================================================================ */
 
+static volatile int g_transport_playing = 0;   /* Play button → MIDI transport */
+static double g_clock_accum = 0;                /* Samples since last 0xF8 tick */
+
 static void host_log(const char *msg) { fprintf(stderr, "chain: %s\n", msg); }
 static float host_bpm(void) { return 120.0f; }
-static int host_clock_status(void) { return 0; }
+static int host_clock_status(void) {
+    return g_transport_playing ? MOVE_CLOCK_STATUS_RUNNING : MOVE_CLOCK_STATUS_STOPPED;
+}
 static int host_midi_noop(const uint8_t *msg, int len) { (void)msg; (void)len; return 0; }
 
 static int host_slot_recv_channel(void *instance) {
@@ -582,6 +587,16 @@ static int g_block_pos = FRAMES_PER_BLOCK;  /* frames consumed within the curren
 static float g_last_peak = 0;
 static pthread_t g_render_thread;
 
+/* Send a 1-byte realtime message (0xF8 clock / 0xFA start / 0xFC stop) to every
+ * chain — bypasses dispatch_to_slots' channel-voice filter. Caller holds g_dsp. */
+static void send_realtime_locked(uint8_t status) {
+    uint8_t msg[1] = { status };
+    for (int s = 0; s < SHADOW_CHAIN_INSTANCES; s++) {
+        if (g_slots[s].instance)
+            g_plugin->on_midi(g_slots[s].instance, msg, 1, MOVE_MIDI_SOURCE_HOST);
+    }
+}
+
 static void produce_block(int16_t *out) {
     int any_solo = 0;
     for (int s = 0; s < SHADOW_CHAIN_INSTANCES; s++) any_solo |= g_slots[s].soloed;
@@ -589,6 +604,17 @@ static void produce_block(int16_t *out) {
     int32_t acc[FRAMES_PER_BLOCK * 2] = {0};
     int16_t tmp[FRAMES_PER_BLOCK * 2];
     pthread_mutex_lock(&g_dsp);
+
+    /* Drive sync-aware MIDI FX (arp/euclidrum/…): emit 24-PPQN clock ticks for
+     * this block before rendering so generated notes sound the same block. */
+    if (g_transport_playing) {
+        double tick_interval = (44100.0 * 60.0) / ((double)host_bpm() * 24.0);
+        g_clock_accum += FRAMES_PER_BLOCK;
+        while (g_clock_accum >= tick_interval) {
+            g_clock_accum -= tick_interval;
+            send_realtime_locked(0xF8);
+        }
+    }
     for (int s = 0; s < SHADOW_CHAIN_INSTANCES; s++) {
         aslot_t *sl = &g_slots[s];
         if (!sl->instance || !sl->active || sl->muted) continue;
@@ -834,21 +860,56 @@ int schwung_slot_active(int slot) {
     return g_running ? g_slots[slot].active : 0;
 }
 
+/* Play button → MIDI transport. Sends Start/Stop to every chain and toggles the
+ * 24-PPQN clock that drives sequencer MIDI FX (euclidrum, arp in clock mode…). */
+void schwung_set_transport(int playing) {
+    if (!g_running || !g_plugin || !g_plugin->on_midi) return;
+    pthread_mutex_lock(&g_dsp);
+    g_transport_playing = playing ? 1 : 0;
+    g_clock_accum = 0;
+    send_realtime_locked(playing ? 0xFA : 0xFC);  /* MIDI Start / Stop */
+    pthread_mutex_unlock(&g_dsp);
+}
+
+int schwung_transport_playing(void) { return g_transport_playing; }
+
 /* Live name+value the chain has mapped to knob `k` (0-7), for the slot the JS
- * is currently showing. Empty name → unmapped. Returns 1 if a name was found. */
-int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen) {
+ * is currently showing. Empty name → unmapped. Returns 1 if a name was found.
+ * *norm (if non-NULL) gets the value normalized into [0,1] over the param's
+ * range, or -1 when unknown (unmapped / non-numeric like an enum). */
+int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen, float *norm) {
     if (name && nlen) name[0] = 0;
     if (value && vlen) value[0] = 0;
+    if (norm) *norm = -1.0f;
     if (!g_running || !g_plugin || !g_plugin->get_param || k < 0 || k > 7) return 0;
     int s = g_knob_slot;
     if (s < 0 || s >= SHADOW_CHAIN_INSTANCES || !g_slots[s].instance) return 0;
-    char key[24];
+    void *inst = g_slots[s].instance;
+    char key[24], buf[64];
     pthread_mutex_lock(&g_dsp);
     snprintf(key, sizeof(key), "knob_%d_name", k + 1);
-    int n = g_plugin->get_param(g_slots[s].instance, key, name, nlen);
-    if (n > 0 && value && vlen) {
-        snprintf(key, sizeof(key), "knob_%d_value", k + 1);
-        g_plugin->get_param(g_slots[s].instance, key, value, vlen);
+    int n = g_plugin->get_param(inst, key, name, nlen);
+    if (n > 0) {
+        if (value && vlen) {
+            snprintf(key, sizeof(key), "knob_%d_value", k + 1);
+            g_plugin->get_param(inst, key, value, vlen);
+        }
+        if (norm) {
+            double lo = 0, hi = 1, val = 0;
+            char *end;
+            snprintf(key, sizeof(key), "knob_%d_min", k + 1);
+            if (g_plugin->get_param(inst, key, buf, sizeof(buf)) > 0) lo = strtod(buf, NULL);
+            snprintf(key, sizeof(key), "knob_%d_max", k + 1);
+            if (g_plugin->get_param(inst, key, buf, sizeof(buf)) > 0) hi = strtod(buf, NULL);
+            snprintf(key, sizeof(key), "knob_%d_value", k + 1);
+            if (g_plugin->get_param(inst, key, buf, sizeof(buf)) > 0) {
+                val = strtod(buf, &end);
+                if (end != buf && hi > lo) {  /* numeric value with a real range */
+                    double t = (val - lo) / (hi - lo);
+                    *norm = (float)(t < 0 ? 0 : (t > 1 ? 1 : t));
+                }
+            }
+        }
     }
     pthread_mutex_unlock(&g_dsp);
     if (n <= 0) { if (name && nlen) name[0] = 0; return 0; }
