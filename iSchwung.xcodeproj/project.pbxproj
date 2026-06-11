@@ -55,6 +55,7 @@
 				6A77592F2FD9D0B6006B82E0 /* Sources */,
 				6A7759302FD9D0B6006B82E0 /* Frameworks */,
 				6A7759312FD9D0B6006B82E0 /* Resources */,
+				6A7759502FD9D0B6006B82E0 /* Embed Schwung Runtime */,
 			);
 			buildRules = (
 			);
@@ -114,6 +115,24 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		6A7759502FD9D0B6006B82E0 /* Embed Schwung Runtime */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Embed Schwung Runtime";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# On-device iOS: bundle the runtime tree + signed module dylibs\n# (library validation only dlopens signed code inside the bundle).\nif [ \"${PLATFORM_NAME}\" != \"iphoneos\" ]; then exit 0; fi\nset -e\nRUNTIME=\"${SRCROOT}/native/build/ios-runtime\"\n[ -d \"$RUNTIME\" ] || { echo \"error: run TARGET=ios native/sync-runtime.sh native/build/ios-runtime\"; exit 1; }\nRES=\"${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/runtime\"\nmkdir -p \"$RES\"\nCHANGED=$(rsync -ai --delete --copy-links --exclude bin/curl \"$RUNTIME/\" \"$RES/\" | head -1)\nFW=\"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}\"\nmkdir -p \"$FW\"\nSTAMP=\"${TARGET_TEMP_DIR}/schwung_dylibs.stamp\"\nNEWER=$(find \"${SRCROOT}/native/build/ios\" -name dsp.so -not -path '*.dSYM/*' -newer \"$STAMP\" 2>/dev/null | head -1)\n[ -f \"$STAMP\" ] || NEWER=force\nif [ -z \"$NEWER\" ] && [ -z \"$CHANGED\" ]; then exit 0; fi\nrm -f \"$FW\"/schwung_*.dylib\nfor ROOT in \"${SRCROOT}/native/build/ios/modules\" \"${SRCROOT}/native/build/ios/external\"; do\n  [ -d \"$ROOT\" ] || continue\n  cd \"$ROOT\"\n  find . -name dsp.so -not -path '*.dSYM/*' | while read -r f; do\n    name=\"schwung_$(dirname \"$f\" | sed 's|^\\./||; s|/|_|g').dylib\"\n    cp \"$f\" \"$FW/$name\"\n  done\ndone\nfor d in \"$FW\"/schwung_*.dylib; do\n  codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" \"$d\"\ndone\ntouch \"$STAMP\"\n# Incremental builds may skip Xcode's own CodeSign step; reseal so the\n# bundle changes above never leave a stale signature.\nXCENT=$(ls \"${TARGET_TEMP_DIR}\"/*.xcent 2>/dev/null | head -1)\ncodesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY}\" ${XCENT:+--entitlements \"$XCENT\"} \"${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		6A77592F2FD9D0B6006B82E0 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -163,7 +182,7 @@
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -225,7 +244,7 @@
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -249,11 +268,17 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
+				"OTHER_LDFLAGS[sdk=macosx*]" = "$(SRCROOT)/native/build/libschwungcore.a -framework AudioToolbox";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/native/build/iossim/libschwungcore.a -framework AudioToolbox";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/native/build/ios/libschwungcore.a -framework AudioToolbox";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = iSchwung;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -263,8 +288,8 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -274,13 +299,14 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Debug;
@@ -293,11 +319,17 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = RN99DN2GFQ;
-				ENABLE_APP_SANDBOX = YES;
-				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = NO;
+				SWIFT_OBJC_BRIDGING_HEADER = "$(SRCROOT)/native/include/schwung_apple.h";
+				"OTHER_LDFLAGS[sdk=macosx*]" = "$(SRCROOT)/native/build/libschwungcore.a -framework AudioToolbox";
+				"OTHER_LDFLAGS[sdk=iphonesimulator*]" = "$(SRCROOT)/native/build/iossim/libschwungcore.a -framework AudioToolbox";
+				"OTHER_LDFLAGS[sdk=iphoneos*]" = "$(SRCROOT)/native/build/ios/libschwungcore.a -framework AudioToolbox";
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = iSchwung;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
@@ -307,8 +339,8 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.5;
@@ -318,13 +350,14 @@
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = "1,2";
 				XROS_DEPLOYMENT_TARGET = 26.5;
 			};
 			name = Release;
