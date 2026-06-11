@@ -1,5 +1,19 @@
 # iSchwung
 
+> **⚠️ Disclaimer — please read.** This was **vibe coded** — built fast and
+> exploratory, *not* cleaned up for an official release. Expect rough edges,
+> hardcoded assumptions, and barely any tests. **Do whatever you please with it**
+> — no warranties, no support implied.
+>
+> **All the real work belongs to others.** iSchwung is just an Apple-platform
+> port of **[Schwung](https://github.com/charlesvestal/schwung)** by
+> [Charles Vestal](https://github.com/charlesvestal). Schwung in turn builds on
+> the **[Move Anything](https://github.com/bobbydigitales/move-anything)** project
+> by [@bobbydigitales](https://github.com/bobbydigitales) — with @talktogreg,
+> @impbox, @deets, and especially @bobbyd — which figured out how to talk to the
+> Move's hardware in the first place. Huge credit and thanks to all of them; this
+> repo merely wires their work onto macOS / iOS.
+
 A port of [Schwung](https://github.com/charlesvestal/schwung)'s on-screen **Shadow
 UI** to Apple platforms (macOS / iOS / iPadOS), running Schwung's four chain-slot
 audio pipeline **standalone** — no Ableton Move hardware required. The Move's
