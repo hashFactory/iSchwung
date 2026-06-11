@@ -248,29 +248,27 @@ final class SchwungEngine: ObservableObject {
 
     private var pollCount = 0
 
-    /// Pull the live name+value the chain mapped to each of the 8 knobs.
+    /// Pull the live name+value for each of the 8 knobs, reflecting whatever the
+    /// hardware knobs control in the current shadow-UI context.
     private func pollKnobLabels() {
         var names = [String](repeating: "", count: 8)
         var values = [String](repeating: "", count: 8)
         var norms = [Double](repeating: -1, count: 8)
-        var nbuf = [CChar](repeating: 0, count: 32)
-        var vbuf = [CChar](repeating: 0, count: 32)
-        var norm: Float = -1
-        for k in 0..<8 {
-            if schwung_knob_label(Int32(k), &nbuf, 32, &vbuf, 32, &norm) != 0 {
-                // Chain returns "target: param" (e.g. "synth: cutoff") — show just the param.
-                let raw = String(cString: nbuf)
-                names[k] = raw.contains(": ") ? String(raw.split(separator: ":", maxSplits: 1)[1])
-                    .trimmingCharacters(in: .whitespaces) : raw
-                values[k] = String(cString: vbuf)
-                norms[k] = Double(norm)
-            }
+
+        // Primary: the shadow UI publishes the live per-knob context map (which
+        // param each knob drives in the current view/component/level); we read
+        // current values for it. When the map has no real mapping yet (UI hasn't
+        // rendered a knob view, or a synth was loaded outside the JS), fall back
+        // to chain macros + the sound generator's default knobs so it's never
+        // blank.
+        let mapped = applyKnobContextMap(&names, &values, &norms)
+                     && names.contains { !$0.isEmpty }
+        if !mapped {
+            names = [String](repeating: "", count: 8)
+            values = [String](repeating: "", count: 8)
+            norms = [Double](repeating: -1, count: 8)
+            legacyKnobLabels(&names, &values, &norms)
         }
-        // Most patches define no performance-macro mappings, so the chain
-        // reports nothing above. Fall back to the sound generator's own default
-        // knob layout (ui_hierarchy root `knobs` + chain_params) so the common
-        // "synth loaded, editing it" case still shows names/values/gauges.
-        synthKnobFallback(&names, &values, &norms)
 
         if names != knobNames { knobNames = names }
         if values != knobValues { knobValues = values }
@@ -279,10 +277,59 @@ final class SchwungEngine: ObservableObject {
 
     private struct ParamMeta { let name, type: String; let min, max: Double; let options: [String] }
 
-    /// Generic get_param against the shown chain slot (synth:/fx1: prefixes etc.).
-    private func chainParam(_ key: String) -> String? {
+    /// get_param against a chain slot (slot < 0 → the shown slot).
+    private func chainParam(_ key: String, slot: Int32 = -1) -> String? {
         var buf = [CChar](repeating: 0, count: 4096)
-        return schwung_chain_param(-1, key, &buf, 4096) > 0 ? String(cString: buf) : nil
+        return schwung_chain_param(slot, key, &buf, 4096) > 0 ? String(cString: buf) : nil
+    }
+
+    /// Read the shadow UI's published knob-context map and fill in live values.
+    /// Returns false if the file isn't there yet (UI hasn't flushed a frame).
+    private func applyKnobContextMap(_ names: inout [String], _ values: inout [String],
+                                     _ norms: inout [Double]) -> Bool {
+        let path = dataRoot + "/schwung/.ischwung_knobs.json"
+        guard let data = FileManager.default.contents(atPath: path),
+              let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return false }
+        for k in 0..<Swift.min(8, arr.count) {
+            let e = arr[k]
+            names[k] = (e["n"] as? String) ?? ""
+            guard let key = e["k"] as? String, !key.isEmpty else { continue }
+            let slot = Int32((e["s"] as? NSNumber)?.intValue ?? 0)
+            let type = (e["t"] as? String) ?? "float"
+            let mn = (e["mn"] as? NSNumber)?.doubleValue ?? 0
+            let mx = (e["mx"] as? NSNumber)?.doubleValue ?? 1
+            let opts = (e["o"] as? [String]) ?? []
+            guard let raw = chainParam(key, slot: slot)?.trimmingCharacters(in: .whitespaces) else { continue }
+            if type == "enum", let idx = Int(raw), idx >= 0, idx < opts.count {
+                values[k] = opts[idx]
+                norms[k] = opts.count > 1 ? Double(idx) / Double(opts.count - 1) : 0
+            } else if let v = Double(raw) {
+                values[k] = v == v.rounded() && abs(v) >= 1 ? String(Int(v)) : String(format: "%.2f", v)
+                if mx > mn { norms[k] = Swift.max(0, Swift.min(1, (v - mn) / (mx - mn))) }
+            } else {
+                values[k] = raw
+            }
+        }
+        return true
+    }
+
+    /// Fallback before the JS publisher has run: chain performance macros, then
+    /// the sound generator's own default knob layout.
+    private func legacyKnobLabels(_ names: inout [String], _ values: inout [String],
+                                  _ norms: inout [Double]) {
+        var nbuf = [CChar](repeating: 0, count: 32)
+        var vbuf = [CChar](repeating: 0, count: 32)
+        var norm: Float = -1
+        for k in 0..<8 {
+            if schwung_knob_label(Int32(k), &nbuf, 32, &vbuf, 32, &norm) != 0 {
+                let raw = String(cString: nbuf)
+                names[k] = raw.contains(": ") ? String(raw.split(separator: ":", maxSplits: 1)[1])
+                    .trimmingCharacters(in: .whitespaces) : raw
+                values[k] = String(cString: vbuf)
+                norms[k] = Double(norm)
+            }
+        }
+        synthKnobFallback(&names, &values, &norms)
     }
 
     /// Fill any still-unlabeled knobs from the synth's default knob assignment.

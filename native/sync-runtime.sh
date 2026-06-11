@@ -72,6 +72,50 @@ cat >> "$S/shadow/shadow_ui.js" <<'ISCHWUNG_KNOBS'
 })();
 ISCHWUNG_KNOBS
 fi
+
+# Tweak: the app's on-screen knob row needs to mirror what the 8 hardware knobs
+# actually control in the *current* view (component/level), not a static guess.
+# getKnobContext already resolves that (it's what the OLED touch overlay uses), so
+# publish the 8-knob context map to a file the app polls. Written on display flush,
+# only when the mapping changes (cheap); the app fills in live values itself.
+if ! grep -q "iSchwung: publish knob context" "$S/shadow/shadow_ui.js"; then
+cat >> "$S/shadow/shadow_ui.js" <<'ISCHWUNG_PUBLISH'
+
+/* iSchwung: publish knob context — mirror the live 8-knob mapping to a file.
+ * Wraps globalThis.tick (a JS-writable per-frame hook; the native flush fns are
+ * read-only). Calls buildKnobContextForKnob directly (fresh, bypassing the
+ * getKnobContext cache, which can hold a stale empty from before a synth loaded)
+ * a few times a second, and only writes when the mapping changes. */
+(function () {
+    if (typeof globalThis.tick !== "function" || typeof buildKnobContextForKnob !== "function") return;
+    var __tick = globalThis.tick;
+    var __last = "", __cnt = 0;
+    function __publishKnobs() {
+        var arr = [];
+        for (var k = 0; k < 8; k++) {
+            var c = null;
+            try { c = buildKnobContextForKnob(k); } catch (e) {}
+            if (c && c.fullKey && !c.noMapping && !c.noModule) {
+                var m = c.meta || {};
+                arr.push({ s: (c.slot != null ? c.slot : 0), k: c.fullKey,
+                           n: (c.displayName || ""), t: (m.type || "float"),
+                           mn: (m.min != null ? m.min : 0), mx: (m.max != null ? m.max : 1),
+                           o: (m.options && m.options.length) ? m.options : [] });
+            } else {
+                arr.push({ s: 0, k: "", n: "", t: "", mn: 0, mx: 1, o: [] });
+            }
+        }
+        var j = JSON.stringify(arr);
+        if (j !== __last) { __last = j; try { host_write_file("/data/UserData/schwung/.ischwung_knobs.json", j); } catch (e) {} }
+    }
+    globalThis.tick = function () {
+        var r = __tick.apply(this, arguments);
+        if ((++__cnt % 6) === 0) __publishKnobs();   // ~7 Hz
+        return r;
+    };
+})();
+ISCHWUNG_PUBLISH
+fi
 cp "$REPO_DIR"/src/shared/*.mjs "$S/shared/"
 cp "$REPO_DIR"/src/host/version.txt "$S/host/" 2>/dev/null || echo "dev" > "$S/host/version.txt"
 cp "$NATIVE_DIR"/build/assets/host/font.png "$NATIVE_DIR"/build/assets/host/font.png.dat "$S/host/"
