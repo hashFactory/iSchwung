@@ -84,7 +84,7 @@ struct MoveSurfaceView: View {
             Spacer(minLength: 8)
             ForEach(0..<8, id: \.self) { i in
                 KnobColumn(name: engine.knobNames[i], value: engine.knobValues[i]) {
-                    EncoderKnob(size: 68,
+                    EncoderKnob(size: 68, norm: engine.knobNorm[i],
                                 onDelta: { engine.sendEncoder(MoveMap.knobs[i], delta: $0) },
                                 onHover: { engine.encoderHover(cc: MoveMap.knobs[i],
                                                                touchNote: MoveMap.knobTouch[i],
@@ -213,8 +213,9 @@ struct MoveSurfaceView: View {
     private var bottomRow: some View {
         HStack(spacing: 18) {
             HStack(spacing: 12) {
-                RoundButton(symbol: "play.fill", rgb: engine.ccLEDs[MoveMap.play]) {
-                    engine.tapButton(MoveMap.play)
+                RoundButton(symbol: engine.isPlaying ? "stop.fill" : "play.fill",
+                            led: engine.isPlaying ? 127 : 0) {
+                    engine.togglePlay()
                 }
                 RoundButton(symbol: "record.circle", rgb: engine.ccLEDs[MoveMap.rec]) {
                     engine.tapButton(MoveMap.rec)
@@ -440,24 +441,28 @@ struct StatusLEDs: View {
 
 // MARK: - Encoders
 
-/// Relative encoder with a 270° value gauge. The gauge tracks the encoder's
-/// own accumulated position (not the engine param yet — that needs per-knob
-/// value plumbing), giving clear spatial feedback as you turn.
+/// Relative encoder with a 270° value gauge. When the chain reports the mapped
+/// parameter's normalized value (`norm` ≥ 0) the gauge mirrors the real value
+/// and range; unmapped knobs fall back to a fine local accumulator just for
+/// turn feedback.
 struct EncoderKnob: View {
     let size: CGFloat
+    var norm: Double = -1                       // engine value 0…1, <0 = unmapped
     let onDelta: (Int) -> Void
     let onHover: (Bool) -> Void
 
-    @State private var value: Double = 0.5     // 0…1 gauge position
+    @State private var localValue: Double = 0.5  // fallback when unmapped
     @State private var residual: CGFloat = 0
     @State private var lastY: CGFloat? = nil
     @State private var hovered = false
 
     private let pixelsPerDetent: CGFloat = 7
-    private let perDetent = 0.03                // gauge units per detent
+    private let perDetent = 0.012               // fine, so unmapped turns don't jump
     private let arcWidth: CGFloat = 3
 
     var body: some View {
+        let mapped = norm >= 0
+        let value = mapped ? norm : localValue
         let gaugeAngle = -135 + value * 270     // 0→lower-left, 1→lower-right
 
         ZStack {
@@ -471,13 +476,14 @@ struct EncoderKnob: View {
                 .rotationEffect(.degrees(135))
                 .padding(arcWidth)
             Circle().trim(from: 0, to: 0.75 * value)
-                .stroke(hovered ? Color.white : Color.white.opacity(0.85),
+                .stroke(mapped ? (hovered ? Color.white : Color.white.opacity(0.85))
+                               : Color.white.opacity(0.3),  // dim when not a real value
                         style: StrokeStyle(lineWidth: arcWidth, lineCap: .round))
                 .rotationEffect(.degrees(135))
                 .padding(arcWidth)
             // position indicator
             Capsule()
-                .fill(Color.white.opacity(0.95))
+                .fill(Color.white.opacity(mapped ? 0.95 : 0.5))
                 .frame(width: 2.5, height: size * 0.22)
                 .offset(y: -size * 0.24)
                 .rotationEffect(.degrees(gaugeAngle))
@@ -502,7 +508,9 @@ struct EncoderKnob: View {
                 let detents = Int(residual / pixelsPerDetent)
                 if detents != 0 {
                     residual -= CGFloat(detents) * pixelsPerDetent
-                    value = min(1, max(0, value + Double(detents) * perDetent))
+                    // Mapped knobs read their position back from the engine;
+                    // only move the local fallback when unmapped.
+                    if !mapped { localValue = min(1, max(0, localValue + Double(detents) * perDetent)) }
                     onDelta(detents)
                 }
             }

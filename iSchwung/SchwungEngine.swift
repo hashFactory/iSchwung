@@ -23,6 +23,8 @@ final class SchwungEngine: ObservableObject {
     @Published var audioLevel: Double = 0       // 0…1 smoothed output peak (green LED)
     @Published var knobNames = [String](repeating: "", count: 8)   // live per-knob param name
     @Published var knobValues = [String](repeating: "", count: 8)  // live per-knob value
+    @Published var knobNorm = [Double](repeating: -1, count: 8)    // 0…1 gauge pos, -1 = unmapped
+    @Published var isPlaying = false           // our MIDI clock transport (drives sequencer FX)
 
     /// Dev PoC: the freshly cloned schwung repo this app feeds from.
     static let projectRoot = "/Users/tristan/Desktop/iSchwung"
@@ -110,6 +112,15 @@ final class SchwungEngine: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06) { [weak self] in
             self?.sendCC(cc, 0)
         }
+    }
+
+    /// Play toggles our standalone MIDI clock (the only transport source here),
+    /// which sends Start/Stop + 24-PPQN ticks to every chain so sequencer MIDI
+    /// FX (euclidrum, clock-synced arps) advance. Also flashes the JS play LED.
+    func togglePlay() {
+        isPlaying.toggle()
+        schwung_set_transport(isPlaying ? 1 : 0)
+        sendCC(MoveMap.play, isPlaying ? 127 : 0)
     }
 
     /// Relative encoder: delta in detents, encoded 1-63 CW / 65-127 CCW.
@@ -241,19 +252,23 @@ final class SchwungEngine: ObservableObject {
     private func pollKnobLabels() {
         var names = [String](repeating: "", count: 8)
         var values = [String](repeating: "", count: 8)
+        var norms = [Double](repeating: -1, count: 8)
         var nbuf = [CChar](repeating: 0, count: 32)
         var vbuf = [CChar](repeating: 0, count: 32)
+        var norm: Float = -1
         for k in 0..<8 {
-            if schwung_knob_label(Int32(k), &nbuf, 32, &vbuf, 32) != 0 {
+            if schwung_knob_label(Int32(k), &nbuf, 32, &vbuf, 32, &norm) != 0 {
                 // Chain returns "target: param" (e.g. "synth: cutoff") — show just the param.
                 let raw = String(cString: nbuf)
                 names[k] = raw.contains(": ") ? String(raw.split(separator: ":", maxSplits: 1)[1])
                     .trimmingCharacters(in: .whitespaces) : raw
                 values[k] = String(cString: vbuf)
+                norms[k] = Double(norm)
             }
         }
         if names != knobNames { knobNames = names }
         if values != knobValues { knobValues = values }
+        if norms != knobNorm { knobNorm = norms }
     }
 
     private func poll() {
