@@ -61,6 +61,7 @@ struct MoveSurfaceView: View {
                 .frame(width: geo.size.width, height: geo.size.height)
         }
         .background(Theme.well)
+        .overlay(TouchIndicator().allowsHitTesting(false))   // faint circle per touch
         .ignoresSafeArea()
         .statusBarHidden()
         #endif
@@ -232,6 +233,7 @@ struct KnobCell: View {
         KnobColumn(name: engine.knobNames[index], value: engine.knobValues[index]) {
             EncoderKnob(size: 68, norm: engine.knobNorm[index],
                         onDelta: { engine.sendEncoder(MoveMap.knobs[index], delta: $0) },
+                        onSetNorm: { engine.setKnobNorm(index: index, norm: $0) },
                         onHover: { engine.encoderHover(cc: MoveMap.knobs[index],
                                                        touchNote: MoveMap.knobTouch[index],
                                                        inside: $0) })
@@ -466,14 +468,16 @@ struct KnobColumn<Content: View>: View {
         VStack(spacing: 3) {
             knob()
             Text(name.isEmpty ? " " : name)
-                .font(.system(size: 12, weight: .medium))
+                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .textCase(.uppercase)
+                .tracking(0.8)
                 .foregroundStyle(Theme.label)
                 .lineLimit(1).minimumScaleFactor(0.6)
             Text(value)
-                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.system(size: 13.5, weight: .bold, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1).minimumScaleFactor(0.6)
-                .frame(height: 15)
+                .frame(height: 16)
         }
         .frame(width: 78)
     }
@@ -610,16 +614,21 @@ struct EncoderKnob: View {
     let size: CGFloat
     var norm: Double = -1                       // engine value 0…1, <0 = unmapped
     let onDelta: (Int) -> Void
+    var onSetNorm: ((Double) -> Void)? = nil    // absolute set for mapped knobs
     let onHover: (Bool) -> Void
 
     @State private var localValue: Double = 0.5  // fallback when unmapped
     @State private var residual: CGFloat = 0
     @State private var lastX: CGFloat? = nil
+    @State private var dragStartNorm: Double = 0
     @State private var hovered = false
 
     private let pixelsPerDetent: CGFloat = 7
     private let perDetent = 0.012               // fine, so unmapped turns don't jump
     private let arcWidth: CGFloat = 3
+    // Full min→max sweep takes ~2 surface widths (≈ 2 phone lengths in landscape)
+    // of horizontal drag, regardless of how many steps the param has.
+    private let fullSweepPoints: CGFloat = 2360
 
     var body: some View {
         let mapped = norm >= 0
@@ -661,22 +670,29 @@ struct EncoderKnob: View {
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
                 if lastX == nil {
-                    lastX = g.location.x
+                    lastX = g.location.x          // anchor the drag
+                    dragStartNorm = mapped ? norm : localValue
                     #if !os(macOS)
                     onHover(true)  // no hover on touch: finger down = capacitive touch
                     #endif
                     return
                 }
-                let dx = g.location.x - lastX!     // right = up, left = down
-                lastX = g.location.x
-                residual += dx
-                let detents = Int(residual / pixelsPerDetent)
-                if detents != 0 {
-                    residual -= CGFloat(detents) * pixelsPerDetent
-                    // Mapped knobs read their position back from the engine;
-                    // only move the local fallback when unmapped.
-                    if !mapped { localValue = min(1, max(0, localValue + Double(detents) * perDetent)) }
-                    onDelta(detents)
+                if mapped, let onSetNorm {
+                    // Absolute: map distance from the anchor to a 0…1 target so
+                    // full range is a fixed drag regardless of step count.
+                    let dx = g.location.x - lastX!
+                    onSetNorm(min(1, max(0, dragStartNorm + Double(dx / fullSweepPoints))))
+                } else {
+                    // Unmapped (e.g. master volume): relative detents.
+                    let dx = g.location.x - lastX!
+                    lastX = g.location.x
+                    residual += dx
+                    let detents = Int(residual / pixelsPerDetent)
+                    if detents != 0 {
+                        residual -= CGFloat(detents) * pixelsPerDetent
+                        localValue = min(1, max(0, localValue + Double(detents) * perDetent))
+                        onDelta(detents)
+                    }
                 }
             }
             .onEnded { _ in
