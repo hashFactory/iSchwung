@@ -87,8 +87,11 @@ int main(int argc, char *argv[]) {
     /* === Audio: load simple-synth into slot 1 and play a note === */
     shadow_param_t *p = test_attach_param();
     if (p) {
+        const char *syn = getenv("SMOKE_SYNTH");
+        if (!syn || !syn[0]) syn = "simple-synth";
         strcpy(p->key, "synth:module");
-        strcpy(p->value, "simple-synth");
+        strncpy(p->value, syn, sizeof(p->value) - 1);
+        p->value[sizeof(p->value) - 1] = '\0';
         p->slot = 0;
         p->response_ready = 0;
         p->error = 0;
