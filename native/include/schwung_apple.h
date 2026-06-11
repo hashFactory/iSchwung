@@ -64,6 +64,15 @@ int schwung_transport_playing(void);
  * range, or -1 if unknown. Returns 1 if mapped (name non-empty), 0 otherwise. */
 int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen, float *norm);
 
+/* Generic get_param against a chain slot (slot < 0 → the slot the JS is showing).
+ * Used to read synth:ui_hierarchy / synth:chain_params / synth:<key> so Swift can
+ * label the synth's default knobs when no performance macro is mapped. */
+int schwung_chain_param(int slot, const char *key, char *buf, int len);
+
+/* Most recent `max` mono output samples (~[-1,1], chronological) for the
+ * on-screen spectrogram. Returns the count copied. */
+int schwung_audio_capture(float *out, int max);
+
 #ifdef __cplusplus
 }
 #endif

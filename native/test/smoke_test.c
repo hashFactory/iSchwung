@@ -104,6 +104,18 @@ int main(int argc, char *argv[]) {
         float peak = schwung_audio_peak();
         printf("=== audio peak after note: %.4f %s ===\n", peak,
                peak > 0.01f ? "(SOUND!)" : "(silence)");
+        /* New bridges: generic chain get_param + audio capture ring. */
+        char hbuf[2048];
+        int hn = schwung_chain_param(0, "synth:ui_hierarchy", hbuf, sizeof(hbuf));
+        printf("=== synth:ui_hierarchy (%d bytes): %.80s%s ===\n",
+               hn, hbuf, hn > 80 ? "…" : "");
+        float cap[512];
+        int cn = schwung_audio_capture(cap, 512);
+        float capmax = 0;
+        for (int i = 0; i < cn; i++) { float a = cap[i] < 0 ? -cap[i] : cap[i]; if (a > capmax) capmax = a; }
+        printf("=== audio_capture: %d samples, peak %.4f %s ===\n", cn, capmax,
+               capmax > 0.001f ? "(CAPTURING!)" : "(silent)");
+
         test_send_dsp_note(0x80, 60, 0);
 
         /* === Transport: load euclidrum as MIDI FX, press play, expect the

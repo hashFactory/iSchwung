@@ -587,6 +587,13 @@ static int g_block_pos = FRAMES_PER_BLOCK;  /* frames consumed within the curren
 static float g_last_peak = 0;
 static pthread_t g_render_thread;
 
+/* Mono downmix ring of the most recent output, for the on-screen spectrogram.
+ * Single-producer (render thread) / single-consumer (UI); benign races are fine
+ * for a visualizer. CAP_SIZE must stay a power of two for the index mask. */
+#define CAP_SIZE 4096
+static float g_cap_buf[CAP_SIZE];
+static volatile uint32_t g_cap_w = 0;
+
 /* Send a 1-byte realtime message (0xF8 clock / 0xFA start / 0xFC stop) to every
  * chain — bypasses dispatch_to_slots' channel-voice filter. Caller holds g_dsp. */
 static void send_realtime_locked(uint8_t status) {
@@ -643,6 +650,12 @@ static void produce_block(int16_t *out) {
     }
     g_last_peak = peak / 32768.0f;
     if (g_overlay) g_overlay->sampler_vu_peak = (int16_t)peak;
+
+    /* Feed the spectrogram: mono downmix of this block, ~[-1,1]. */
+    for (int i = 0; i < FRAMES_PER_BLOCK; i++) {
+        g_cap_buf[g_cap_w & (CAP_SIZE - 1)] = (out[i * 2] + out[i * 2 + 1]) * (1.0f / 65536.0f);
+        g_cap_w++;
+    }
 }
 
 static void *render_thread(void *arg) {
@@ -916,4 +929,31 @@ int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen, float
     name[nlen - 1] = 0;
     if (value && vlen) value[vlen - 1] = 0;
     return 1;
+}
+
+/* Generic get_param against a slot's chain instance (slot < 0 → the slot the JS
+ * is currently showing). Lets Swift read synth:ui_hierarchy / synth:chain_params
+ * / synth:<key> to label knobs the chain has no performance-macro mapping for.
+ * Returns bytes written (>0) or 0 if unavailable. */
+int schwung_chain_param(int slot, const char *key, char *buf, int len) {
+    if (buf && len) buf[0] = 0;
+    if (!g_running || !g_plugin || !g_plugin->get_param || !key) return 0;
+    int s = slot < 0 ? g_knob_slot : slot;
+    if (s < 0 || s >= SHADOW_CHAIN_INSTANCES || !g_slots[s].instance) return 0;
+    pthread_mutex_lock(&g_dsp);
+    int n = g_plugin->get_param(g_slots[s].instance, key, buf, len);
+    pthread_mutex_unlock(&g_dsp);
+    if (n <= 0) { if (buf && len) buf[0] = 0; return 0; }
+    buf[len - 1] = 0;
+    return n;
+}
+
+/* Copy the most recent `max` mono output samples (~[-1,1]) in chronological
+ * order into `out` for the spectrogram. Returns the count copied. */
+int schwung_audio_capture(float *out, int max) {
+    if (!out || max <= 0) return 0;
+    if (max > CAP_SIZE) max = CAP_SIZE;
+    uint32_t w = g_cap_w, start = w - (uint32_t)max;
+    for (int i = 0; i < max; i++) out[i] = g_cap_buf[(start + i) & (CAP_SIZE - 1)];
+    return max;
 }
