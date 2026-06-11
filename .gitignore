@@ -10,3 +10,7 @@ native/build/
 DerivedData/
 *.xcuserstate
 .DS_Store
+
+# Per-user Xcode state (directory is named after the local username)
+xcuserdata/
+**/xcuserdata/

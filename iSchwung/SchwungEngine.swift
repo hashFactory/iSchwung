@@ -38,8 +38,12 @@ final class SchwungEngine {
         var min = 0.0; var max = 1.0; var optionCount = 0
     }
 
-    /// Dev PoC: the freshly cloned schwung repo this app feeds from.
-    static let projectRoot = "/Users/tristan/Desktop/iSchwung"
+    /// Dev PoC: the iSchwung repo this app feeds from, located from this source
+    /// file's path at build time so it works from any clone (no hardcoded path).
+    static let projectRoot: String = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()   // .../iSchwung
+        .deletingLastPathComponent()   // repo root
+        .path
 
     private var pollTimer: Timer?
     private var lastGeneration: UInt32 = 0
