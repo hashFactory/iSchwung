@@ -412,19 +412,19 @@ struct KnobColumn<Content: View>: View {
     @ViewBuilder let knob: () -> Content
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 3) {
             knob()
             Text(name.isEmpty ? " " : name)
-                .font(.system(size: 8, weight: .medium))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.label)
                 .lineLimit(1).minimumScaleFactor(0.6)
             Text(value)
-                .font(.system(size: 8.5, weight: .semibold, design: .rounded))
+                .font(.system(size: 12.5, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.9))
                 .lineLimit(1).minimumScaleFactor(0.6)
-                .frame(height: 10)
+                .frame(height: 15)
         }
-        .frame(width: 70)
+        .frame(width: 78)
     }
 }
 
@@ -569,7 +569,7 @@ struct EncoderKnob: View {
 
     @State private var localValue: Double = 0.5  // fallback when unmapped
     @State private var residual: CGFloat = 0
-    @State private var lastY: CGFloat? = nil
+    @State private var lastX: CGFloat? = nil
     @State private var hovered = false
 
     private let pixelsPerDetent: CGFloat = 7
@@ -611,18 +611,20 @@ struct EncoderKnob: View {
             hovered = inside
             onHover(inside)  // capacitive touch → param overlay on the display
         }
+        // First touch establishes (selects) the knob; sliding left/right then
+        // lowers/raises the value, like dragging a horizontal slider.
         .gesture(DragGesture(minimumDistance: 0)
             .onChanged { g in
-                if lastY == nil {
-                    lastY = g.location.y
+                if lastX == nil {
+                    lastX = g.location.x
                     #if !os(macOS)
                     onHover(true)  // no hover on touch: finger down = capacitive touch
                     #endif
                     return
                 }
-                let dy = lastY! - g.location.y
-                lastY = g.location.y
-                residual += dy
+                let dx = g.location.x - lastX!     // right = up, left = down
+                lastX = g.location.x
+                residual += dx
                 let detents = Int(residual / pixelsPerDetent)
                 if detents != 0 {
                     residual -= CGFloat(detents) * pixelsPerDetent
@@ -633,7 +635,7 @@ struct EncoderKnob: View {
                 }
             }
             .onEnded { _ in
-                lastY = nil
+                lastX = nil
                 residual = 0
                 #if !os(macOS)
                 onHover(false)
