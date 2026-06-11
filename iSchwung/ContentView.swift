@@ -2,20 +2,15 @@
 //  ContentView.swift
 //  iSchwung
 //
-//  Created by Tristan on 6/10/26.
-//
 
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var engine = SchwungEngine()
+
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
-        }
-        .padding()
+        MoveSurfaceView(engine: engine)
+            .onAppear { engine.start() }
     }
 }
 

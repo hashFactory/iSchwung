@@ -2,8 +2,6 @@
 //  iSchwungApp.swift
 //  iSchwung
 //
-//  Created by Tristan on 6/10/26.
-//
 
 import SwiftUI
 
@@ -13,5 +11,6 @@ struct iSchwungApp: App {
         WindowGroup {
             ContentView()
         }
+        .windowResizability(.contentSize)
     }
 }
