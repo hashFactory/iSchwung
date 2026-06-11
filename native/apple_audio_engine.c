@@ -948,6 +948,20 @@ int schwung_chain_param(int slot, const char *key, char *buf, int len) {
     return n;
 }
 
+/* Generic set_param against a slot's chain instance (slot < 0 → the shown slot).
+ * Lets Swift drive a knob to an absolute value (uniform drag distance) instead
+ * of relative encoder ticks. Mirrors the SHM param path but calls directly under
+ * the dsp lock. Returns 1 on success. */
+int schwung_set_chain_param(int slot, const char *key, const char *value) {
+    if (!g_running || !g_plugin || !g_plugin->set_param || !key || !value) return 0;
+    int s = slot < 0 ? g_knob_slot : slot;
+    if (s < 0 || s >= SHADOW_CHAIN_INSTANCES || !g_slots[s].instance) return 0;
+    pthread_mutex_lock(&g_dsp);
+    g_plugin->set_param(g_slots[s].instance, key, value);
+    pthread_mutex_unlock(&g_dsp);
+    return 1;
+}
+
 /* Copy the most recent `max` mono output samples (~[-1,1]) in chronological
  * order into `out` for the spectrogram. Returns the count copied. */
 int schwung_audio_capture(float *out, int max) {

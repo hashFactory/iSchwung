@@ -29,6 +29,15 @@ final class SchwungEngine {
     var knobNorm = [Double](repeating: -1, count: 8)    // 0…1 gauge pos, -1 = unmapped
     var isPlaying = false           // our MIDI clock transport (drives sequencer FX)
 
+    /// What each of the 8 knobs currently drives, so a drag can set an absolute
+    /// value (uniform sweep distance). Filled alongside the knob labels; not
+    /// observed by any view.
+    @ObservationIgnored private var knobControl = [KnobControl](repeating: KnobControl(), count: 8)
+    struct KnobControl: Equatable {
+        var slot: Int32 = 0; var key = ""; var type = ""
+        var min = 0.0; var max = 1.0; var optionCount = 0
+    }
+
     /// Dev PoC: the freshly cloned schwung repo this app feeds from.
     static let projectRoot = "/Users/tristan/Desktop/iSchwung"
 
@@ -264,18 +273,21 @@ final class SchwungEngine {
         // rendered a knob view, or a synth was loaded outside the JS), fall back
         // to chain macros + the sound generator's default knobs so it's never
         // blank.
-        let mapped = applyKnobContextMap(&names, &values, &norms)
+        var controls = [KnobControl](repeating: KnobControl(), count: 8)
+        let mapped = applyKnobContextMap(&names, &values, &norms, &controls)
                      && names.contains { !$0.isEmpty }
         if !mapped {
             names = [String](repeating: "", count: 8)
             values = [String](repeating: "", count: 8)
             norms = [Double](repeating: -1, count: 8)
-            legacyKnobLabels(&names, &values, &norms)
+            controls = [KnobControl](repeating: KnobControl(), count: 8)
+            legacyKnobLabels(&names, &values, &norms, &controls)
         }
 
         if names != knobNames { knobNames = names }
         if values != knobValues { knobValues = values }
         if norms != knobNorm { knobNorm = norms }
+        knobControl = controls
     }
 
     private struct ParamMeta { let name, type: String; let min, max: Double; let options: [String] }
@@ -286,10 +298,31 @@ final class SchwungEngine {
         return schwung_chain_param(slot, key, &buf, 4096) > 0 ? String(cString: buf) : nil
     }
 
+    /// Set knob `index` to a normalized 0…1 value (from a slider-style drag),
+    /// mapping it to the param's real range/options and writing it directly to
+    /// the chain — uniform sweep distance regardless of how many steps it has.
+    func setKnobNorm(index: Int, norm: Double) {
+        guard (0..<8).contains(index) else { return }
+        let c = knobControl[index]
+        guard !c.key.isEmpty else { return }
+        let n = Swift.max(0, Swift.min(1, norm))
+        let value: String
+        if c.type == "enum", c.optionCount > 1 {
+            value = String(Int((n * Double(c.optionCount - 1)).rounded()))
+        } else if c.max > c.min {
+            let v = c.min + n * (c.max - c.min)
+            // Integer range → emit an int (some param parsers reject "220.00").
+            value = (c.min == c.min.rounded() && c.max == c.max.rounded() && (c.max - c.min) >= 3)
+                ? String(Int(v.rounded())) : String(format: "%.4f", v)
+        } else { return }
+        _ = schwung_set_chain_param(c.slot, c.key, value)
+        knobNorm[index] = n      // optimistic; the poll confirms within 100ms
+    }
+
     /// Read the shadow UI's published knob-context map and fill in live values.
     /// Returns false if the file isn't there yet (UI hasn't flushed a frame).
     private func applyKnobContextMap(_ names: inout [String], _ values: inout [String],
-                                     _ norms: inout [Double]) -> Bool {
+                                     _ norms: inout [Double], _ controls: inout [KnobControl]) -> Bool {
         let path = dataRoot + "/schwung/.ischwung_knobs.json"
         guard let data = FileManager.default.contents(atPath: path),
               let arr = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return false }
@@ -302,6 +335,8 @@ final class SchwungEngine {
             let mn = (e["mn"] as? NSNumber)?.doubleValue ?? 0
             let mx = (e["mx"] as? NSNumber)?.doubleValue ?? 1
             let opts = (e["o"] as? [String]) ?? []
+            controls[k] = KnobControl(slot: slot, key: key, type: type,
+                                      min: mn, max: mx, optionCount: opts.count)
             guard let raw = chainParam(key, slot: slot)?.trimmingCharacters(in: .whitespaces) else { continue }
             if type == "enum", let idx = Int(raw), idx >= 0, idx < opts.count {
                 values[k] = opts[idx]
@@ -319,7 +354,7 @@ final class SchwungEngine {
     /// Fallback before the JS publisher has run: chain performance macros, then
     /// the sound generator's own default knob layout.
     private func legacyKnobLabels(_ names: inout [String], _ values: inout [String],
-                                  _ norms: inout [Double]) {
+                                  _ norms: inout [Double], _ controls: inout [KnobControl]) {
         var nbuf = [CChar](repeating: 0, count: 32)
         var vbuf = [CChar](repeating: 0, count: 32)
         var norm: Float = -1
@@ -330,14 +365,16 @@ final class SchwungEngine {
                     .trimmingCharacters(in: .whitespaces) : raw
                 values[k] = String(cString: vbuf)
                 norms[k] = Double(norm)
+                // Performance-macro knobs aren't directly settable by key here;
+                // leave their control empty so the drag falls back to ticks.
             }
         }
-        synthKnobFallback(&names, &values, &norms)
+        synthKnobFallback(&names, &values, &norms, &controls)
     }
 
     /// Fill any still-unlabeled knobs from the synth's default knob assignment.
     private func synthKnobFallback(_ names: inout [String], _ values: inout [String],
-                                   _ norms: inout [Double]) {
+                                   _ norms: inout [Double], _ controls: inout [KnobControl]) {
         guard names.contains("") else { return }
         guard let hier = chainParam("synth:ui_hierarchy")?.data(using: .utf8),
               let top = (try? JSONSerialization.jsonObject(with: hier)) as? [String: Any],
@@ -362,6 +399,9 @@ final class SchwungEngine {
             let key = knobs[k]
             let m = meta[key]
             names[k] = m?.name ?? key
+            controls[k] = KnobControl(slot: -1, key: "synth:\(key)", type: m?.type ?? "float",
+                                      min: m?.min ?? 0, max: m?.max ?? 1,
+                                      optionCount: m?.options.count ?? 0)
             guard let raw = chainParam("synth:\(key)")?.trimmingCharacters(in: .whitespaces) else { continue }
             if let m, m.type == "enum", let idx = Int(raw), idx >= 0, idx < m.options.count {
                 values[k] = m.options[idx]

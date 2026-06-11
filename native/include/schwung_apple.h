@@ -69,6 +69,10 @@ int schwung_knob_label(int k, char *name, int nlen, char *value, int vlen, float
  * label the synth's default knobs when no performance macro is mapped. */
 int schwung_chain_param(int slot, const char *key, char *buf, int len);
 
+/* Set a chain param to an absolute value (slot < 0 → the shown slot), so a knob
+ * can map drag distance → value uniformly instead of sending relative ticks. */
+int schwung_set_chain_param(int slot, const char *key, const char *value);
+
 /* Most recent `max` mono output samples (~[-1,1], chronological) for the
  * on-screen spectrogram. Returns the count copied. */
 int schwung_audio_capture(float *out, int max);
