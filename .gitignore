@@ -1,0 +1,12 @@
+# Vendored upstream Schwung checkout (its own repo; pulled at build time)
+git-schwung/
+
+# Build artifacts: static libs, module dylibs, runtime trees, QuickJS, soundfonts,
+# cloned module sources, Python venv, dSYMs
+native/build/
+**/*.dSYM/
+
+# Xcode / macOS
+DerivedData/
+*.xcuserstate
+.DS_Store
