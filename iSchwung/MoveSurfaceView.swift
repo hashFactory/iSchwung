@@ -520,49 +520,28 @@ struct StatusLEDs: View {
 
 // MARK: - Intensity graph
 
-/// A continuous 20-second trace of output intensity: a white line whose fill
-/// fades quickly down through gray to transparent black, newest at the right.
-/// One stroked + one filled Path in a `Canvas` (GPU-backed) → essentially free.
-/// Sits behind the bottom controls, which occlude its top edge.
+/// A continuous trace of output intensity: a bright line whose fill fades down
+/// through gray to black, newest at the right. The whole thing is drawn by a
+/// per-pixel Metal shader (`IntensityGraph.metal`) — the CPU only hands over the
+/// sample array each frame, so it's effectively free. Sits behind the bottom
+/// controls, which occlude its top edge.
 struct IntensityStrip: View {
     var height: CGFloat = 30
     @StateObject private var model = IntensityModel()
 
-    private let fade = Gradient(stops: [
-        .init(color: .white.opacity(0.9), location: 0.0),
-        .init(color: Color(white: 0.5).opacity(0.28), location: 0.18),
-        .init(color: .clear, location: 0.5),
-    ])
-
     var body: some View {
-        Canvas(rendersAsynchronously: true) { ctx, size in
-            let s = model.samples()           // oldest → newest, 0…1
-            guard s.count > 1 else { return }
-            let dx = size.width / CGFloat(s.count - 1)
-            func pt(_ i: Int) -> CGPoint { CGPoint(x: CGFloat(i) * dx, y: size.height * (1 - CGFloat(s[i]))) }
-
-            // Filled area under the curve, fading from the line down to clear.
-            var area = Path()
-            area.move(to: CGPoint(x: 0, y: size.height))
-            area.addLine(to: pt(0))
-            for i in 1..<s.count { area.addLine(to: pt(i)) }
-            area.addLine(to: CGPoint(x: size.width, y: size.height))
-            area.closeSubpath()
-            ctx.fill(area, with: .linearGradient(fade, startPoint: .zero,
-                                                 endPoint: CGPoint(x: 0, y: size.height)))
-
-            // The bright line itself.
-            var line = Path()
-            line.move(to: pt(0))
-            for i in 1..<s.count { line.addLine(to: pt(i)) }
-            ctx.stroke(line, with: .color(.white.opacity(0.92)),
-                       style: StrokeStyle(lineWidth: 1.1, lineJoin: .round))
-        }
-        .frame(height: height)
-        .frame(maxWidth: .infinity)
-        .background(Color.black)        // no clip: bleeds to the screen edges
-        .onAppear { model.start() }
-        .onDisappear { model.stop() }
+        // @StateObject re-evaluates this isolated view on the 30 Hz ring advance;
+        // the only CPU work is handing the sample array to the shader, which
+        // rasterizes the line + fade per-pixel on the GPU.
+        Rectangle()
+            .fill(.black)
+            .colorEffect(ShaderLibrary.intensityGraph(
+                .boundingRect,
+                .floatArray(model.samples())))
+            .frame(height: height)
+            .frame(maxWidth: .infinity)
+            .onAppear { model.start() }
+            .onDisappear { model.stop() }
     }
 }
 
