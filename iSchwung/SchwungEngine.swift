@@ -266,9 +266,63 @@ final class SchwungEngine: ObservableObject {
                 norms[k] = Double(norm)
             }
         }
+        // Most patches define no performance-macro mappings, so the chain
+        // reports nothing above. Fall back to the sound generator's own default
+        // knob layout (ui_hierarchy root `knobs` + chain_params) so the common
+        // "synth loaded, editing it" case still shows names/values/gauges.
+        synthKnobFallback(&names, &values, &norms)
+
         if names != knobNames { knobNames = names }
         if values != knobValues { knobValues = values }
         if norms != knobNorm { knobNorm = norms }
+    }
+
+    private struct ParamMeta { let name, type: String; let min, max: Double; let options: [String] }
+
+    /// Generic get_param against the shown chain slot (synth:/fx1: prefixes etc.).
+    private func chainParam(_ key: String) -> String? {
+        var buf = [CChar](repeating: 0, count: 4096)
+        return schwung_chain_param(-1, key, &buf, 4096) > 0 ? String(cString: buf) : nil
+    }
+
+    /// Fill any still-unlabeled knobs from the synth's default knob assignment.
+    private func synthKnobFallback(_ names: inout [String], _ values: inout [String],
+                                   _ norms: inout [Double]) {
+        guard names.contains("") else { return }
+        guard let hier = chainParam("synth:ui_hierarchy")?.data(using: .utf8),
+              let top = (try? JSONSerialization.jsonObject(with: hier)) as? [String: Any],
+              let levels = top["levels"] as? [String: Any],
+              let root = levels["root"] as? [String: Any],
+              let knobs = root["knobs"] as? [String] else { return }
+
+        var meta: [String: ParamMeta] = [:]
+        if let cp = chainParam("synth:chain_params")?.data(using: .utf8),
+           let arr = (try? JSONSerialization.jsonObject(with: cp)) as? [[String: Any]] {
+            for p in arr {
+                guard let key = p["key"] as? String else { continue }
+                meta[key] = ParamMeta(name: (p["name"] as? String) ?? key,
+                                      type: (p["type"] as? String) ?? "float",
+                                      min: (p["min"] as? NSNumber)?.doubleValue ?? 0,
+                                      max: (p["max"] as? NSNumber)?.doubleValue ?? 1,
+                                      options: (p["options"] as? [String]) ?? [])
+            }
+        }
+
+        for k in 0..<8 where names[k].isEmpty && k < knobs.count {
+            let key = knobs[k]
+            let m = meta[key]
+            names[k] = m?.name ?? key
+            guard let raw = chainParam("synth:\(key)")?.trimmingCharacters(in: .whitespaces) else { continue }
+            if let m, m.type == "enum", let idx = Int(raw), idx >= 0, idx < m.options.count {
+                values[k] = m.options[idx]
+                norms[k] = m.options.count > 1 ? Double(idx) / Double(m.options.count - 1) : 0
+            } else if let v = Double(raw) {
+                values[k] = v == v.rounded() && abs(v) >= 1 ? String(Int(v)) : String(format: "%.2f", v)
+                if let m, m.max > m.min { norms[k] = Swift.max(0, Swift.min(1, (v - m.min) / (m.max - m.min))) }
+            } else {
+                values[k] = raw
+            }
+        }
     }
 
     private func poll() {

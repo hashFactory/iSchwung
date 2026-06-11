@@ -30,6 +30,48 @@ if ! grep -q "iSchwung: standalone home" "$S/shadow/shadow_ui.js"; then
     perl -0pi -e 's{(/\* Exit Global Settings .*? exit shadow mode \*/\n)}{$1                setView(VIEWS.SLOTS);  /* iSchwung: standalone home */\n}s' \
         "$S/shadow/shadow_ui.js"
 fi
+
+# Tweak: in the chain overview the knob row is unmapped (knobs map to params only
+# once a component is entered), so touching a knob shows "not mapped". Wrap
+# buildKnobContextForKnob to fall back to the sound generator's own default knobs
+# (its ui_hierarchy), so touch/turn act on the synth — matching the labels the app
+# shows. A performance-macro mapping still wins. Appended to the staged copy only.
+if ! grep -q "iSchwung: overview knob fallback" "$S/shadow/shadow_ui.js"; then
+cat >> "$S/shadow/shadow_ui.js" <<'ISCHWUNG_KNOBS'
+
+/* iSchwung: overview knob fallback — map the otherwise-unmapped chain-overview
+ * knob row to the slot's sound generator default knobs. */
+(function () {
+    if (typeof buildKnobContextForKnob !== "function") return;
+    var __orig = buildKnobContextForKnob;
+    buildKnobContextForKnob = function (knobIndex) {
+        var ctx = __orig(knobIndex);
+        if (ctx) return ctx;
+        try {
+            var slot = (typeof selectedSlot === "number") ? selectedSlot : -1;
+            if (slot < 0) return null;
+            /* A performance macro owns this knob → leave it to the existing path. */
+            if (getSlotParam(slot, "knob_" + (knobIndex + 1) + "_name")) return null;
+            var mod = getSlotParam(slot, "synth_module") || "";
+            if (!mod) return null;
+            var h = getComponentHierarchy(slot, "synth");
+            var lvl = (h && h.levels) ? (h.levels.root || h.levels[Object.keys(h.levels)[0]]) : null;
+            if (lvl && (!lvl.knobs || !lvl.knobs.length) && lvl.children && h.levels[lvl.children])
+                lvl = h.levels[lvl.children];
+            if (!lvl || !lvl.knobs || knobIndex >= lvl.knobs.length) return null;
+            var key = lvl.knobs[knobIndex];
+            var cps = getComponentChainParams(slot, "synth") || [];
+            var meta = normalizeExpandedParamMeta(key, cps.find(function (p) { return p.key === key; }));
+            var name = (meta && meta.name) ? meta.name : key.replace(/_/g, " ");
+            var pn = getSlotParam(slot, "synth:name") || mod;
+            return { slot: slot, key: key, fullKey: "synth:" + key, meta: meta,
+                     pluginName: pn, displayName: name,
+                     title: "S" + (slot + 1) + ": " + pn + " " + name };
+        } catch (e) { return null; }
+    };
+})();
+ISCHWUNG_KNOBS
+fi
 cp "$REPO_DIR"/src/shared/*.mjs "$S/shared/"
 cp "$REPO_DIR"/src/host/version.txt "$S/host/" 2>/dev/null || echo "dev" > "$S/host/version.txt"
 cp "$NATIVE_DIR"/build/assets/host/font.png "$NATIVE_DIR"/build/assets/host/font.png.dat "$S/host/"
