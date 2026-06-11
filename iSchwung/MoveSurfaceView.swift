@@ -44,7 +44,7 @@ enum Theme {
 // MARK: - Root surface
 
 struct MoveSurfaceView: View {
-    @ObservedObject var engine: SchwungEngine
+    let engine: SchwungEngine
 
     var body: some View {
         #if os(macOS)
@@ -83,28 +83,17 @@ struct MoveSurfaceView: View {
         .padding(.top, 12)
         .frame(width: 1180, height: 600)
         .background(Theme.body)
-        .overlay(alignment: .bottomLeading) {
-            Text(engine.status)
-                .font(.system(size: 9, design: .monospaced))
-                .foregroundStyle(Theme.label.opacity(0.5))
-                .padding(.leading, 26).padding(.bottom, 8)
-        }
+        .overlay(alignment: .bottomLeading) { StatusText(engine: engine) }
     }
 
     private var topRow: some View {
         HStack(alignment: .center, spacing: 14) {
-            DisplayView(image: engine.displayImage)
+            DisplayCell(engine: engine)
             Spacer(minLength: 8)
             ForEach(0..<8, id: \.self) { i in
-                KnobColumn(name: engine.knobNames[i], value: engine.knobValues[i]) {
-                    EncoderKnob(size: 68, norm: engine.knobNorm[i],
-                                onDelta: { engine.sendEncoder(MoveMap.knobs[i], delta: $0) },
-                                onHover: { engine.encoderHover(cc: MoveMap.knobs[i],
-                                                               touchNote: MoveMap.knobTouch[i],
-                                                               inside: $0) })
-                }
+                KnobCell(engine: engine, index: i)
             }
-            StatusLEDs(running: engine.engineRunning, level: engine.audioLevel)
+            StatusLEDsCell(engine: engine)
             Spacer(minLength: 8)
             KnobColumn(name: "Volume", value: "") {
                 EncoderKnob(size: 80,
@@ -130,12 +119,8 @@ struct MoveSurfaceView: View {
                 // Upside-down triangle: Back + Menu on top, gear centered below.
                 VStack(spacing: 10) {
                     HStack(spacing: 22) {
-                        RoundButton(symbol: "chevron.left", size: 50, led: engine.ccLEDs[MoveMap.back]) {
-                            engine.tapButton(MoveMap.back)
-                        }
-                        RoundButton(symbol: "line.3.horizontal", size: 50, led: engine.ccLEDs[MoveMap.menu]) {
-                            engine.tapButton(MoveMap.menu)
-                        }
+                        CCButton(engine: engine, cc: MoveMap.back, symbol: "chevron.left", size: 50)
+                        CCButton(engine: engine, cc: MoveMap.menu, symbol: "line.3.horizontal", size: 50)
                     }
                     // Long-pressing the jog or Shift+touch-master+jog open Settings too.
                     RoundButton(symbol: "gearshape.fill", size: 50, led: nil) {
@@ -154,30 +139,17 @@ struct MoveSurfaceView: View {
     private var trackColumn: some View {
         VStack(spacing: 10) {
             ForEach(Array(MoveMap.tracks.enumerated()), id: \.offset) { idx, cc in
-                let led = MovePalette.color(engine.ccLEDs[cc] ?? 0)
-                let base = led == .clear ? Theme.trackColors[idx] : led
-                TrackBar(color: base.opacity(engine.selectedSlot == idx ? 1.0 : 0.45),
-                         glow: engine.selectedSlot == idx) {
-                    engine.tapButton(cc)
-                }
+                TrackBarCell(engine: engine, index: idx, cc: cc)
             }
         }
     }
 
     private var padGrid: some View {
-        // Pads glow in the selected track's color when its chain is playable.
-        let playable = engine.slotActive[engine.selectedSlot]
-        let defaultColor = playable
-            ? Theme.trackColors[engine.selectedSlot].opacity(0.32) : Color.clear
-        return Grid(horizontalSpacing: 10, verticalSpacing: 10) {
+        Grid(horizontalSpacing: 10, verticalSpacing: 10) {
             ForEach(0..<4, id: \.self) { row in
                 GridRow {
                     ForEach(0..<8, id: \.self) { col in
-                        let note = MoveMap.pad(row: row, col: col)
-                        let led = MovePalette.color(engine.noteLEDs[note] ?? 0)
-                        PadView(color: led == .clear ? defaultColor : led,
-                                pressColor: Theme.trackColors[engine.selectedSlot],
-                                press: { engine.sendNote(note, on: $0) })
+                        PadCell(engine: engine, note: MoveMap.pad(row: row, col: col))
                     }
                 }
             }
@@ -188,36 +160,20 @@ struct MoveSurfaceView: View {
     private var rightButtons: some View {
         Grid(horizontalSpacing: 12, verticalSpacing: 16) {
             GridRow {
-                RoundButton(symbol: "viewfinder", led: engine.ccLEDs[MoveMap.capture]) {
-                    engine.tapButton(MoveMap.capture)
-                }
-                RoundButton(symbol: "circle.fill", rgb: engine.ccLEDs[MoveMap.sample]) {
-                    engine.tapButton(MoveMap.sample)
-                }
+                CCButton(engine: engine, cc: MoveMap.capture, symbol: "viewfinder")
+                CCButton(engine: engine, cc: MoveMap.sample, symbol: "circle.fill", rgb: true)
             }
             GridRow {
-                RoundButton(symbol: "repeat", led: engine.ccLEDs[MoveMap.loop]) {
-                    engine.tapButton(MoveMap.loop)
-                }
-                RoundButton(text: "M", led: engine.ccLEDs[MoveMap.mute]) {
-                    engine.tapButton(MoveMap.mute)
-                }
+                CCButton(engine: engine, cc: MoveMap.loop, symbol: "repeat")
+                CCButton(engine: engine, cc: MoveMap.mute, text: "M")
             }
             GridRow {
-                RoundButton(symbol: "xmark", led: engine.ccLEDs[MoveMap.delete]) {
-                    engine.tapButton(MoveMap.delete)
-                }
-                RoundButton(symbol: "square.on.square", led: engine.ccLEDs[MoveMap.copy]) {
-                    engine.tapButton(MoveMap.copy)
-                }
+                CCButton(engine: engine, cc: MoveMap.delete, symbol: "xmark")
+                CCButton(engine: engine, cc: MoveMap.copy, symbol: "square.on.square")
             }
             GridRow {
-                RoundButton(symbol: "arrow.uturn.backward", led: engine.ccLEDs[MoveMap.undo]) {
-                    engine.tapButton(MoveMap.undo)
-                }
-                RoundButton(symbol: "shift.fill", led: engine.shiftHeld ? 127 : 0) {
-                    engine.toggleShift()
-                }
+                CCButton(engine: engine, cc: MoveMap.undo, symbol: "arrow.uturn.backward")
+                ShiftButton(engine: engine)
             }
         }
         .frame(width: 130)
@@ -226,20 +182,14 @@ struct MoveSurfaceView: View {
     private var bottomRow: some View {
         HStack(spacing: 18) {
             HStack(spacing: 12) {
-                RoundButton(symbol: engine.isPlaying ? "stop.fill" : "play.fill",
-                            led: engine.isPlaying ? 127 : 0) {
-                    engine.togglePlay()
-                }
-                RoundButton(symbol: "record.circle", rgb: engine.ccLEDs[MoveMap.rec]) {
-                    engine.tapButton(MoveMap.rec)
-                }
+                PlayButton(engine: engine)
+                CCButton(engine: engine, cc: MoveMap.rec, symbol: "record.circle", rgb: true)
             }
             .frame(width: 150, alignment: .leading)
 
             HStack(spacing: 8) {
                 ForEach(MoveMap.steps, id: \.self) { note in
-                    StepButton(rgb: engine.noteLEDs[note], white: engine.ccLEDs[note],
-                               press: { engine.sendNote(note, on: $0) })
+                    StepCell(engine: engine, note: note)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -248,31 +198,132 @@ struct MoveSurfaceView: View {
             Grid(horizontalSpacing: 5, verticalSpacing: 5) {
                 GridRow {
                     Color.clear.frame(width: 30, height: 30)
-                    RoundButton(symbol: "plus", small: true, led: engine.ccLEDs[MoveMap.up]) {
-                        engine.tapButton(MoveMap.up)
-                    }
+                    CCButton(engine: engine, cc: MoveMap.up, symbol: "plus", small: true)
                     Color.clear.frame(width: 30, height: 30)
                 }
                 GridRow {
-                    RoundButton(symbol: "chevron.left", small: true, led: engine.ccLEDs[MoveMap.left]) {
-                        engine.tapButton(MoveMap.left)
-                    }
+                    CCButton(engine: engine, cc: MoveMap.left, symbol: "chevron.left", small: true)
                     Color.clear.frame(width: 30, height: 30)
-                    RoundButton(symbol: "chevron.right", small: true, led: engine.ccLEDs[MoveMap.right]) {
-                        engine.tapButton(MoveMap.right)
-                    }
+                    CCButton(engine: engine, cc: MoveMap.right, symbol: "chevron.right", small: true)
                 }
                 GridRow {
                     Color.clear.frame(width: 30, height: 30)
-                    RoundButton(symbol: "minus", small: true, led: engine.ccLEDs[MoveMap.down]) {
-                        engine.tapButton(MoveMap.down)
-                    }
+                    CCButton(engine: engine, cc: MoveMap.down, symbol: "minus", small: true)
                     Color.clear.frame(width: 30, height: 30)
                 }
             }
             .frame(width: 120, alignment: .trailing)
         }
     }
+}
+
+// MARK: - Engine-bound leaf cells
+//
+// Each cell reads only its own slice of the @Observable engine, so a change to
+// one property (e.g. an LED) re-evaluates just these tiny leaves — never the
+// whole surface. The parent `MoveSurfaceView` body reads no observable property,
+// so it subscribes to nothing and is evaluated once.
+
+/// One of the 8 top encoders + its live name/value label.
+struct KnobCell: View {
+    let engine: SchwungEngine
+    let index: Int
+    var body: some View {
+        KnobColumn(name: engine.knobNames[index], value: engine.knobValues[index]) {
+            EncoderKnob(size: 68, norm: engine.knobNorm[index],
+                        onDelta: { engine.sendEncoder(MoveMap.knobs[index], delta: $0) },
+                        onHover: { engine.encoderHover(cc: MoveMap.knobs[index],
+                                                       touchNote: MoveMap.knobTouch[index],
+                                                       inside: $0) })
+        }
+    }
+}
+
+/// A round button whose LED follows a CC. `rgb` picks the RGB-palette vs.
+/// white-brightness interpretation of the same `ccLEDs[cc]` value.
+struct CCButton: View {
+    let engine: SchwungEngine
+    let cc: Int
+    var symbol: String? = nil
+    var text: String? = nil
+    var small = false
+    var size: CGFloat? = nil
+    var rgb = false
+    var body: some View {
+        let v = engine.ccLEDs[cc]
+        RoundButton(symbol: symbol, text: text, small: small, size: size,
+                    led: rgb ? nil : v, rgb: rgb ? v : nil) { engine.tapButton(cc) }
+    }
+}
+
+struct ShiftButton: View {
+    let engine: SchwungEngine
+    var body: some View {
+        RoundButton(symbol: "shift.fill", led: engine.shiftHeld ? 127 : 0) { engine.toggleShift() }
+    }
+}
+
+struct PlayButton: View {
+    let engine: SchwungEngine
+    var body: some View {
+        RoundButton(symbol: engine.isPlaying ? "stop.fill" : "play.fill",
+                    led: engine.isPlaying ? 127 : 0) { engine.togglePlay() }
+    }
+}
+
+struct TrackBarCell: View {
+    let engine: SchwungEngine
+    let index: Int
+    let cc: Int
+    var body: some View {
+        let led = MovePalette.color(engine.ccLEDs[cc] ?? 0)
+        let base = led == .clear ? Theme.trackColors[index] : led
+        let sel = engine.selectedSlot == index
+        TrackBar(color: base.opacity(sel ? 1.0 : 0.45), glow: sel) { engine.tapButton(cc) }
+    }
+}
+
+struct PadCell: View {
+    let engine: SchwungEngine
+    let note: Int
+    var body: some View {
+        let slot = engine.selectedSlot
+        let defaultColor = engine.slotActive[slot]
+            ? Theme.trackColors[slot].opacity(0.32) : Color.clear
+        let led = MovePalette.color(engine.noteLEDs[note] ?? 0)
+        PadView(color: led == .clear ? defaultColor : led,
+                pressColor: Theme.trackColors[slot],
+                press: { engine.sendNote(note, on: $0) })
+    }
+}
+
+struct StepCell: View {
+    let engine: SchwungEngine
+    let note: Int
+    var body: some View {
+        StepButton(rgb: engine.noteLEDs[note], white: engine.ccLEDs[note],
+                   press: { engine.sendNote(note, on: $0) })
+    }
+}
+
+struct DisplayCell: View {
+    let engine: SchwungEngine
+    var body: some View { DisplayView(image: engine.displayImage) }
+}
+
+struct StatusText: View {
+    let engine: SchwungEngine
+    var body: some View {
+        Text(engine.status)
+            .font(.system(size: 9, design: .monospaced))
+            .foregroundStyle(Theme.label.opacity(0.5))
+            .padding(.leading, 26).padding(.bottom, 8)
+    }
+}
+
+struct StatusLEDsCell: View {
+    let engine: SchwungEngine
+    var body: some View { StatusLEDs(running: engine.engineRunning) }
 }
 
 // MARK: - Display
@@ -430,10 +481,14 @@ struct KnobColumn<Content: View>: View {
 
 // MARK: - Status LEDs
 
-/// Two faint indicators: red = engine alive, green = live output level.
+/// Two faint indicators: red = engine alive, green = live output level. The
+/// green level is polled here (own @State + timer) rather than coming from the
+/// engine as @Published — otherwise it would invalidate the whole surface ~30×/s.
 struct StatusLEDs: View {
     let running: Bool
-    let level: Double   // 0…1 smoothed peak
+
+    @State private var level: Double = 0
+    @State private var timer: Timer?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -449,6 +504,17 @@ struct StatusLEDs: View {
                 .shadow(color: .green.opacity(level), radius: 2 + 5 * level)
         }
         .frame(width: 12)
+        .onAppear {
+            guard timer == nil else { return }
+            let t = Timer(timeInterval: 1.0 / 20.0, repeats: true) { _ in
+                let peak = Double(min(schwung_audio_peak(), 1))
+                let next = peak > level ? peak : level * 0.8 + peak * 0.2   // fast attack, soft decay
+                if abs(next - level) > 0.004 { level = next }
+            }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
+        }
+        .onDisappear { timer?.invalidate(); timer = nil }
     }
 }
 
@@ -506,7 +572,7 @@ struct IntensityStrip: View {
 final class IntensityModel: ObservableObject {
     @Published private(set) var tick: Int = 0
 
-    private let rate = 60
+    private let rate = 30          // a slow envelope line is smooth at 30 fps
     private let seconds = 12
     private let win = 1024
     private var ring: [Float]

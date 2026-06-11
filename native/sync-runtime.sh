@@ -83,18 +83,19 @@ cat >> "$S/shadow/shadow_ui.js" <<'ISCHWUNG_PUBLISH'
 
 /* iSchwung: publish knob context — mirror the live 8-knob mapping to a file.
  * Wraps globalThis.tick (a JS-writable per-frame hook; the native flush fns are
- * read-only). Calls buildKnobContextForKnob directly (fresh, bypassing the
- * getKnobContext cache, which can hold a stale empty from before a synth loaded)
- * a few times a second, and only writes when the mapping changes. */
+ * read-only). Reads getKnobContext (cached — cheap, no per-frame IPC) at ~3 Hz
+ * and writes only when the mapping changes. The cache is dropped at ~0.7 Hz so a
+ * synth loaded without a view change still refreshes; navigation already busts
+ * it. The app fills in live values itself. */
 (function () {
-    if (typeof globalThis.tick !== "function" || typeof buildKnobContextForKnob !== "function") return;
+    if (typeof globalThis.tick !== "function" || typeof getKnobContext !== "function") return;
     var __tick = globalThis.tick;
     var __last = "", __cnt = 0;
     function __publishKnobs() {
         var arr = [];
         for (var k = 0; k < 8; k++) {
             var c = null;
-            try { c = buildKnobContextForKnob(k); } catch (e) {}
+            try { c = getKnobContext(k); } catch (e) {}
             if (c && c.fullKey && !c.noMapping && !c.noModule) {
                 var m = c.meta || {};
                 arr.push({ s: (c.slot != null ? c.slot : 0), k: c.fullKey,
@@ -110,7 +111,11 @@ cat >> "$S/shadow/shadow_ui.js" <<'ISCHWUNG_PUBLISH'
     }
     globalThis.tick = function () {
         var r = __tick.apply(this, arguments);
-        if ((++__cnt % 6) === 0) __publishKnobs();   // ~7 Hz
+        __cnt++;
+        if ((__cnt % 64) === 0) {   /* ~0.7 Hz: bust the cache so a no-nav load refreshes */
+            try { if (typeof cachedKnobContexts !== "undefined") cachedKnobContexts.length = 0; } catch (e) {}
+        }
+        if ((__cnt % 16) === 0) __publishKnobs();   /* ~3 Hz, cached → ~no IPC */
         return r;
     };
 })();

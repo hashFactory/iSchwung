@@ -10,21 +10,24 @@ import AVFAudio
 /// background thread inside libschwungcore) and bridges it to SwiftUI:
 /// framebuffer polling, LED state from the MIDI-out ring, control input in.
 @MainActor
-final class SchwungEngine: ObservableObject {
+@Observable
+final class SchwungEngine {
 
-    @Published var displayImage: CGImage?
-    @Published var noteLEDs: [Int: Int] = [:]   // note (pads 68-99, steps 16-31) → palette index
-    @Published var ccLEDs: [Int: Int] = [:]     // cc (tracks 40-43, buttons) → palette index / brightness
-    @Published var shiftHeld = false
-    @Published var status: String = "starting…"
-    @Published var selectedSlot = 0
-    @Published var slotActive = [false, false, false, false]
-    @Published var engineRunning = false       // red status LED
-    @Published var audioLevel: Double = 0       // 0…1 smoothed output peak (green LED)
-    @Published var knobNames = [String](repeating: "", count: 8)   // live per-knob param name
-    @Published var knobValues = [String](repeating: "", count: 8)  // live per-knob value
-    @Published var knobNorm = [Double](repeating: -1, count: 8)    // 0…1 gauge pos, -1 = unmapped
-    @Published var isPlaying = false           // our MIDI clock transport (drives sequencer FX)
+    // @Observable tracks reads per-property, per-view: a leaf that reads only
+    // `noteLEDs` re-evaluates only when LEDs change, not when a knob moves. Keep
+    // each surface cell reading its own slice (see *Cell views) to preserve that.
+    var displayImage: CGImage?
+    var noteLEDs: [Int: Int] = [:]   // note (pads 68-99, steps 16-31) → palette index
+    var ccLEDs: [Int: Int] = [:]     // cc (tracks 40-43, buttons) → palette index / brightness
+    var shiftHeld = false
+    var status: String = "starting…"
+    var selectedSlot = 0
+    var slotActive = [false, false, false, false]
+    var engineRunning = false       // red status LED
+    var knobNames = [String](repeating: "", count: 8)   // live per-knob param name
+    var knobValues = [String](repeating: "", count: 8)  // live per-knob value
+    var knobNorm = [Double](repeating: -1, count: 8)    // 0…1 gauge pos, -1 = unmapped
+    var isPlaying = false           // our MIDI clock transport (drives sequencer FX)
 
     /// Dev PoC: the freshly cloned schwung repo this app feeds from.
     static let projectRoot = "/Users/tristan/Desktop/iSchwung"
@@ -373,12 +376,9 @@ final class SchwungEngine: ObservableObject {
     }
 
     private func poll() {
-        let peak = Double(min(schwung_audio_peak(), 1))
-        // Fast attack, ~150ms decay → lively but readable green LED.
-        audioLevel = peak > audioLevel ? peak : audioLevel * 0.8 + peak * 0.2
-        if peak > 0.001 || status.hasPrefix("running ") {
-            status = String(format: "running  ▮ %.0f%%", peak * 100)
-        }
+        // Note: the live audio level is NOT published here — it would change
+        // every poll and invalidate the whole surface (all knobs/pads/steps).
+        // StatusLEDs self-polls the peak so only the tiny LED redraws.
         let gen = schwung_display_generation()
         if gen != lastGeneration {
             lastGeneration = gen

@@ -6,7 +6,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var engine = SchwungEngine()
+    @State private var engine = SchwungEngine()
 
     var body: some View {
         MoveSurfaceView(engine: engine)
