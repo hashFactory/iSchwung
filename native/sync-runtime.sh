@@ -159,9 +159,12 @@ install_module sound_generators/simple-synth  "$NATIVE_DIR/modules/simple-synth"
 if [ -d "$NATIVE_DIR/build/external" ]; then
     rsync -a --exclude '*.dSYM' "$NATIVE_DIR/build/external/" "$S/modules/"
 fi
-# Target-specific dylib overlay (e.g. iossim sf2 build replaces the macOS one)
+# Target-specific dylib overlay (e.g. iossim sf2 build replaces the macOS one).
+# --checksum: a macOS and a same-target sim/device dylib can share byte size and
+# land in the same mtime second, which rsync's default size+time quick-check reads
+# as "unchanged" — leaving the wrong-arch slice in place. Compare content instead.
 if [ "$TARGET" != macos ] && [ -d "$NATIVE_DIR/build/$TARGET/external" ]; then
-    rsync -a --exclude '*.dSYM' "$NATIVE_DIR/build/$TARGET/external/" "$S/modules/"
+    rsync -a --checksum --exclude '*.dSYM' "$NATIVE_DIR/build/$TARGET/external/" "$S/modules/"
 fi
 
 ln -sf /usr/bin/curl "$S/bin/curl"
