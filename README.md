@@ -36,16 +36,22 @@ Apple-specific change lives in `native/` and `iSchwung/`.
 - **Sound generators** — built-in `simple-synth`, plus native ports: `sf2`,
   `dexed`, `obxd`, `braids`, `plaits`, `303`.
 - **Audio FX** — `freeverb`, `mverb`, `midiverb`, `psxverb`, `gate`, `ducker`,
-  `junologue-chorus`, `tapedelay`.
+  `junologue-chorus`, `tapedelay`, `filter`, `usefulity`.
 - **MIDI FX / sequencers** — `euclidrum`, `eucalypso`, `genera`, `superarp`,
   `chord`, `arp`, `velocity_scale`.
+- **Tools** — `davebox` (8-track sequencer). See the standalone caveats below.
 - **JS-only catalog modules** via `native/fetch-modules.sh`.
 
 ### Not done / limitations
-- **~79 Module-Store modules still need native DSP ports** — the catalog's
+- **Most Module-Store modules still need native DSP ports** — the catalog's
   prebuilt `.so` are ARM-Linux and won't load; each needs a per-module macOS/iOS
   recompile (`native/port-*.sh`). The list is in
   `native/build/module-cache/native-needed.txt`. JS-only modules work as-is.
+- **davebox standalone caveats** — it builds and loads, but a few features assume
+  real Move hardware: its tracks 1–4 route to *native Move tracks* (absent here,
+  so only its tracks 5–8 → Schwung chains produce sound), pad aftertouch isn't
+  surfaced by the SwiftUI surface, and Ableton-export shells out via a subprocess
+  that's unavailable on iOS.
 - **LFO modulation** — `master_fx:lfoN` config is stored but not yet applied.
 - **Link Audio / jack / sampler / skipback** — not ported; these requests answer
   "absent."
@@ -147,9 +153,13 @@ TARGET=iossim ./sync-runtime.sh "$PWD/build/ios-data"
 ```sh
 cd native
 ./fetch-modules.sh         # stage JS-only catalog modules
-./port-sf2.sh              # a native port (also: port-dexed/obxd/braids/plaits/303/<fx>.sh)
+./port-sf2.sh              # a native port (also: port-dexed/obxd/braids/plaits/303,
+                           #   the FX ports filter/usefulity/ducker/…, and port-davebox)
 TARGET=iossim ./port-sf2.sh   # simulator slice of the same
 ```
+
+After staging extra modules, re-run `sync-runtime.sh` (per target) so they land in
+the simulator/device data root — `setup.sh` only stages the built-in set.
 
 ---
 
