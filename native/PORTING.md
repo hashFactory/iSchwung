@@ -5,7 +5,7 @@ catalog's prebuilt `.so` are ARM-Linux and won't load on macOS/iOS, so each
 module's DSP needs a per-target recompile via a `native/port-<id>.sh` script (the
 JS UI travels as-is). See [`README.md`](README.md) for how a port is built.
 
-**Progress: 29 / 79 native ports done.** (Plus 10 JS-only catalog modules that
+**Progress: 33 / 79 native ports done.** (Plus 10 JS-only catalog modules that
 already work, and the built-ins below.)
 
 ### Legend
@@ -50,7 +50,7 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | vocoder | ✅ | ★ | High | charlesvestal/schwung-vocoder | vocoder |
 | superboom | ✅ | ★ | Med | filliformes/super-boom-move | bass enhancer |
 | punchfx | ✅ | ★ | Med | filliformes/punchfx-move | transient/punch |
-| cloudseed | ⬜ | ★★ | High | charlesvestal/schwung-cloudseed | algorithmic reverb (C++) |
+| cloudseed | ✅ | ★ | High | charlesvestal/schwung-cloudseed | algorithmic reverb (single-file C) |
 | chowtape | ⬜ | ★★ | High | charlesvestal/schwung-chowtape | ChowDSP tape (C++) |
 | dragonfly-hall | ⬜ | ★★ | High | wolfrenegade1976/move-anything-dragonfly-hall | Dragonfly hall reverb |
 | clap | ⬜ | ★★ | High | charlesvestal/schwung-airwindows | Airwindows collection |
@@ -88,9 +88,9 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | nusaw | ✅ | ★ | High | charlesvestal/schwung-nusaw | supersaw |
 | chiptune | ✅ | ★★ | High | charlesvestal/schwung-chiptune | NES+GB APU; nes_snd_emu submodule |
 | chordism | ✅ | ★ | Med | charlesvestal/schwung-chordism | chord synth |
-| wurl | ⬜ | ★★ | High | filliformes/wurl-move | Wurlitzer EP |
-| moog | ⬜ | ★★ | High | charlesvestal/schwung-moog | Moog model |
-| hera | ⬜ | ★★ | High | charlesvestal/schwung-hera | Juno-106 |
+| wurl | ✅ | ★ | High | filliformes/wurl-move | Wurlitzer EP (single-file C) |
+| moog | ✅ | ★★ | High | charlesvestal/schwung-moog | RaffoSynth Moog; C++ plugin + C engine |
+| hera | ✅ | ★★ | High | charlesvestal/schwung-hera | Juno-106 + BBD chorus; 56 presets, fopen shim |
 | hush1 | ⬜ | ★★ | Med | charlesvestal/schwung-hush1 | — |
 | sfz | ⬜ | ★★ | Med | charlesvestal/schwung-sfz | SFZ player (samples) |
 | mrdrums | ⬜ | ★★ | Med | handcraftedcc/move-everything-mrdrums | drum machine |
@@ -134,7 +134,12 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 ---
 
 ## Next up (high impact ÷ low effort)
-Remaining ★★ High-impact: **cloudseed**, **wurl**, **moog**, **hera**,
-**chowtape**, **dragonfly-hall**, **clap** (Airwindows). Then the ★★ synth batch
-(**hush1**, **mrdrums**, **krautdrums**, **slicer**, **freak**) and the big C++
-engines (**helm**, **surge**, **osirus**) last.
+Remaining ★★ High-impact FX: **chowtape**, **dragonfly-hall**, **clap**
+(Airwindows). Then the ★★ synth/drum batch (**hush1**, **mrdrums**,
+**krautdrums**, **slicer**, **freak**, **sfz**) and the big C++ engines
+(**helm**, **surge**, **osirus**) last. Network/streaming and subprocess-bound
+tools (airplay, webstream, samplerobot, stretch, …) are lowest priority.
+
+> **C++ tip:** force-include `apple_compat_fopen_only.h` (not the full
+> `apple_compat_overrides.h`) for any STL-using module — the full header's
+> `remove()`/`open()` macros collide with `std::remove` etc.
