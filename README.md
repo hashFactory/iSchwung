@@ -34,11 +34,12 @@ Apple-specific change lives in `native/` and `iSchwung/`.
 - **Physical iPhone** — builds and runs (audio + UI) once you set your **own**
   signing team; see [Physical iPhone](#physical-iphone).
 - **Sound generators** — built-in `simple-synth`, plus native ports: `sf2`,
-  `dexed`, `obxd`, `braids`, `plaits`, `303`, `nusaw`, `chiptune`.
+  `dexed`, `obxd`, `braids`, `plaits`, `303`, `nusaw`, `chiptune`, `chordism`.
 - **Audio FX** — `freeverb`, `mverb`, `midiverb`, `psxverb`, `gate`, `ducker`,
-  `junologue-chorus`, `tapedelay`, `filter`, `usefulity`, `ambiotica`.
+  `junologue-chorus`, `tapedelay`, `filter`, `usefulity`, `ambiotica`, `ottx`,
+  `vocoder`, `superboom`, `punchfx`.
 - **MIDI FX / sequencers** — `euclidrum`, `eucalypso`, `genera`, `superarp`,
-  `chord`, `arp`, `velocity_scale`.
+  `branchage`, `chord`, `arp`, `velocity_scale`.
 - **Tools** — `davebox` (8-track sequencer). See the standalone caveats below.
 - **JS-only catalog modules** via `native/fetch-modules.sh`.
 
@@ -46,7 +47,7 @@ Apple-specific change lives in `native/` and `iSchwung/`.
 - **Most Module-Store modules still need native DSP ports** — the catalog's
   prebuilt `.so` are ARM-Linux and won't load; each needs a per-module macOS/iOS
   recompile (`native/port-*.sh`). Per-module status, effort, and impact are
-  tracked in [`native/PORTING.md`](native/PORTING.md) (23 / 79 done). JS-only
+  tracked in [`native/PORTING.md`](native/PORTING.md) (29 / 79 done). JS-only
   modules work as-is.
 - **davebox standalone caveats** — it builds and loads, but a few features assume
   real Move hardware: its tracks 1–4 route to *native Move tracks* (absent here,

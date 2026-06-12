@@ -5,7 +5,7 @@ catalog's prebuilt `.so` are ARM-Linux and won't load on macOS/iOS, so each
 module's DSP needs a per-target recompile via a `native/port-<id>.sh` script (the
 JS UI travels as-is). See [`README.md`](README.md) for how a port is built.
 
-**Progress: 23 / 79 native ports done.** (Plus 10 JS-only catalog modules that
+**Progress: 29 / 79 native ports done.** (Plus 10 JS-only catalog modules that
 already work, and the built-ins below.)
 
 ### Legend
@@ -46,14 +46,14 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | tapedelay | ✅ | ★ | High | charlesvestal/schwung-space-delay | tape/space delay |
 | usefulity | ✅ | ★ | Med | charlesvestal/schwung-usefulity | stereo utility |
 | ambiotica | ✅ | ★★ | Med | charlesvestal/schwung-ambiotica | ambient reverb/granular/looper |
-| ottx | ⬜ | ★★ | High | legsmechanical/schwung-ottx | OTT multiband comp |
-| vocoder | ⬜ | ★★ | High | charlesvestal/schwung-vocoder | vocoder |
+| ottx | ✅ | ★ | High | legsmechanical/schwung-ottx | OTT multiband comp (single-file) |
+| vocoder | ✅ | ★ | High | charlesvestal/schwung-vocoder | vocoder |
+| superboom | ✅ | ★ | Med | filliformes/super-boom-move | bass enhancer |
+| punchfx | ✅ | ★ | Med | filliformes/punchfx-move | transient/punch |
 | cloudseed | ⬜ | ★★ | High | charlesvestal/schwung-cloudseed | algorithmic reverb (C++) |
 | chowtape | ⬜ | ★★ | High | charlesvestal/schwung-chowtape | ChowDSP tape (C++) |
 | dragonfly-hall | ⬜ | ★★ | High | wolfrenegade1976/move-anything-dragonfly-hall | Dragonfly hall reverb |
 | clap | ⬜ | ★★ | High | charlesvestal/schwung-airwindows | Airwindows collection |
-| superboom | ⬜ | ★ | Med | filliformes/super-boom-move | bass enhancer |
-| punchfx | ⬜ | ★ | Med | filliformes/punchfx-move | transient/punch |
 | tapescam | ⬜ | ★★ | Med | charlesvestal/schwung-tapescam | lo-fi tape |
 | granular | ⬜ | ★★ | Med | filliformes/boris-move | granular fx |
 | spectra | ⬜ | ★★ | Med | filliformes/spectra-move | spectral fx |
@@ -71,7 +71,7 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | euclidrum | ✅ | ★ | High | filliformes/euclidrum-move | euclidean drums |
 | genera | ✅ | ★ | High | filliformes/genera-move | generative seq |
 | superarp | ✅ | ★ | High | handcraftedcc/move-everything-superarp | arp |
-| branchage | ⬜ | ★ | Med | broduoliviercontact-web/Schwung-Midi-Fx-branchages-Multi-Random-generator | random generator |
+| branchage | ✅ | ★★ | Med | broduoliviercontact-web/Schwung-Midi-Fx-branchages-Multi-Random-generator | Grids-style random gen; host-header override |
 | midi-player | ⬜ | ★★ | Low | charlesvestal/schwung-midi-player | needs .mid files |
 | impressive-chords | ⬜ | ★★★ | Med | mestela/schwung-impressive-chords | needs presets + python codegen |
 
@@ -87,7 +87,7 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | sf2 | ✅ | ★★ | High | charlesvestal/schwung-sf2 | SoundFont player |
 | nusaw | ✅ | ★ | High | charlesvestal/schwung-nusaw | supersaw |
 | chiptune | ✅ | ★★ | High | charlesvestal/schwung-chiptune | NES+GB APU; nes_snd_emu submodule |
-| chordism | ⬜ | ★ | Med | charlesvestal/schwung-chordism | chord synth |
+| chordism | ✅ | ★ | Med | charlesvestal/schwung-chordism | chord synth |
 | wurl | ⬜ | ★★ | High | filliformes/wurl-move | Wurlitzer EP |
 | moog | ⬜ | ★★ | High | charlesvestal/schwung-moog | Moog model |
 | hera | ⬜ | ★★ | High | charlesvestal/schwung-hera | Juno-106 |
@@ -134,6 +134,7 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 ---
 
 ## Next up (high impact ÷ low effort)
-Best ratio first: **chordism** (★ synth), **superboom**, **punchfx** (★ FX),
-**branchage** (★ MIDI), then the ★★ High-impact batch: **ottx**, **vocoder**,
-**cloudseed**, **wurl**, **moog**, **hera**.
+Remaining ★★ High-impact: **cloudseed**, **wurl**, **moog**, **hera**,
+**chowtape**, **dragonfly-hall**, **clap** (Airwindows). Then the ★★ synth batch
+(**hush1**, **mrdrums**, **krautdrums**, **slicer**, **freak**) and the big C++
+engines (**helm**, **surge**, **osirus**) last.
