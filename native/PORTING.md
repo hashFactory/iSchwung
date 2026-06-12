@@ -5,7 +5,7 @@ catalog's prebuilt `.so` are ARM-Linux and won't load on macOS/iOS, so each
 module's DSP needs a per-target recompile via a `native/port-<id>.sh` script (the
 JS UI travels as-is). See [`README.md`](README.md) for how a port is built.
 
-**Progress: 33 / 79 native ports done.** (Plus 10 JS-only catalog modules that
+**Progress: 41 / 79 native ports done.** (Plus 10 JS-only catalog modules that
 already work, and the built-ins below.)
 
 ### Legend
@@ -51,8 +51,8 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | superboom | ✅ | ★ | Med | filliformes/super-boom-move | bass enhancer |
 | punchfx | ✅ | ★ | Med | filliformes/punchfx-move | transient/punch |
 | cloudseed | ✅ | ★ | High | charlesvestal/schwung-cloudseed | algorithmic reverb (single-file C) |
-| chowtape | ⬜ | ★★ | High | charlesvestal/schwung-chowtape | ChowDSP tape (C++) |
-| dragonfly-hall | ⬜ | ★★ | High | wolfrenegade1976/move-anything-dragonfly-hall | Dragonfly hall reverb |
+| chowtape | ✅ | ★ | High | charlesvestal/schwung-chowtape | ChowDSP tape (single-file C) |
+| dragonfly-hall | ⬜ | ★★★ | High | wolfrenegade1976/move-anything-dragonfly-hall | needs external dragonfly-reverb + DPF/freeverb/kiss_fft |
 | clap | ⬜ | ★★ | High | charlesvestal/schwung-airwindows | Airwindows collection |
 | tapescam | ⬜ | ★★ | Med | charlesvestal/schwung-tapescam | lo-fi tape |
 | granular | ⬜ | ★★ | Med | filliformes/boris-move | granular fx |
@@ -91,20 +91,20 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 | wurl | ✅ | ★ | High | filliformes/wurl-move | Wurlitzer EP (single-file C) |
 | moog | ✅ | ★★ | High | charlesvestal/schwung-moog | RaffoSynth Moog; C++ plugin + C engine |
 | hera | ✅ | ★★ | High | charlesvestal/schwung-hera | Juno-106 + BBD chorus; 56 presets, fopen shim |
-| hush1 | ⬜ | ★★ | Med | charlesvestal/schwung-hush1 | — |
+| hush1 | ✅ | ★★ | Med | charlesvestal/schwung-hush1 | SH-101 synth, 6 TUs |
+| krautdrums | ✅ | ★ | Med | filliformes/krautdrums-move | synthesized drums (single-file) |
+| denis | ✅ | ★ | Med | filliformes/denis-move | synth (single-file C) |
+| signal | ✅ | ★ | Med | filliformes/signal-move | synth (single-file C) |
+| forge | ✅ | ★ | Med | filliformes/forge-move | synth; persists kits.dat |
+| essaim | ✅ | ★ | Med | filliformes/essaim-move | synth; uses midi_send_internal |
+| weird-dreams | ✅ | ★ | Med | filliformes/weird-dreams-move | synth; persists kits.dat |
 | sfz | ⬜ | ★★ | Med | charlesvestal/schwung-sfz | SFZ player (samples) |
-| mrdrums | ⬜ | ★★ | Med | handcraftedcc/move-everything-mrdrums | drum machine |
-| krautdrums | ⬜ | ★★ | Med | filliformes/krautdrums-move | drum synth |
+| mrdrums | ⬜ | ★★★ | Low | handcraftedcc/move-everything-mrdrums | sample drums — needs Move UserLibrary (empty here) |
 | po32-drum | ⬜ | ★★ | Med | mestela/schwung-libpo32 | PO-32 |
 | granny | ⬜ | ★★ | Med | handcraftedcc/move-everything-granny | granular synth |
 | freak | ⬜ | ★★ | Med | handcraftedcc/move-everything-mrhyde | — |
 | slicer | ⬜ | ★★ | Med | j3threejay/move-anything-slicer | sample slicer |
 | breakbeat | ⬜ | ★★ | Med | mestela/schwung-breakbeat | breakbeat slicer (samples) |
-| denis | ⬜ | ★★ | Med | filliformes/denis-move | — |
-| essaim | ⬜ | ★★ | Med | filliformes/essaim-move | — |
-| forge | ⬜ | ★★ | Med | filliformes/forge-move | — |
-| signal | ⬜ | ★★ | Med | filliformes/signal-move | — |
-| weird-dreams | ⬜ | ★★ | Med | filliformes/weird-dreams-move | — |
 | mrsample | ⬜ | ★★★ | Med | charlesvestal/schwung-mrsample | sampler (samples/subprocess) |
 | minijv | ⬜ | ★★★ | Med | charlesvestal/schwung-jv880 | JV-880 (needs ROM) |
 | rex | ⬜ | ★★ | Low | charlesvestal/schwung-rex | ReCycle player |
@@ -134,11 +134,14 @@ No native DSP, so `native/fetch-modules.sh` stages them directly:
 ---
 
 ## Next up (high impact ÷ low effort)
-Remaining ★★ High-impact FX: **chowtape**, **dragonfly-hall**, **clap**
-(Airwindows). Then the ★★ synth/drum batch (**hush1**, **mrdrums**,
-**krautdrums**, **slicer**, **freak**, **sfz**) and the big C++ engines
-(**helm**, **surge**, **osirus**) last. Network/streaming and subprocess-bound
-tools (airplay, webstream, samplerobot, stretch, …) are lowest priority.
+Remaining FX: **clap** (Airwindows), **tapescam**, the filliformes set
+(**spectra**, **structor**, **dissolver**, **verglas**, **granular**).
+**dragonfly-hall** is high-value but needs the external dragonfly-reverb repo
+(DPF/freeverb/kiss_fft) compiled in — a bigger lift. Synth-wise, **freak** is a
+Plaits variant (reuse the plaits recipe); the big C++ engines (**helm**,
+**surge**, **osirus**) and the **sample-based** modules (sfz, mrsample, slicer,
+breakbeat, mrdrums — all need sample/ROM content absent in standalone) are lower
+priority. Network/streaming + subprocess tools last.
 
 > **C++ tip:** force-include `apple_compat_fopen_only.h` (not the full
 > `apple_compat_overrides.h`) for any STL-using module — the full header's
