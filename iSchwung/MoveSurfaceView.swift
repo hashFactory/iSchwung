@@ -156,6 +156,9 @@ struct MoveSurfaceView: View {
             }
         }
         .frame(maxWidth: .infinity)
+        // One multitouch layer over the whole grid so a finger sliding across pads
+        // retriggers each — glissando, like a real Move. Replaces the per-pad taps.
+        .overlay(PadTouchSurface(engine: engine))
     }
 
     private var rightButtons: some View {
@@ -295,7 +298,7 @@ struct PadCell: View {
         let led = MovePalette.color(engine.noteLEDs[note] ?? 0)
         PadView(color: led == .clear ? defaultColor : led,
                 pressColor: Theme.trackColors[slot],
-                press: { engine.sendNote(note, on: $0) })
+                down: engine.padDown.contains(note))
     }
 }
 
@@ -354,8 +357,7 @@ struct DisplayView: View {
 struct PadView: View {
     let color: Color
     var pressColor: Color = .white
-    let press: (Bool) -> Void
-    @State private var down = false
+    let down: Bool   // driven by the grid's sweep layer (see PadSweep.swift)
 
     var body: some View {
         let lit = color != .clear
@@ -368,11 +370,6 @@ struct PadView: View {
                     radius: down ? 10 : 7)
             .frame(minWidth: 56, maxWidth: .infinity, minHeight: 58, maxHeight: .infinity)
             .scaleEffect(down ? 0.97 : 1)
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    if !down { down = true; press(true) }
-                }
-                .onEnded { _ in down = false; press(false) })
     }
 }
 

@@ -18,6 +18,7 @@ final class SchwungEngine {
     // each surface cell reading its own slice (see *Cell views) to preserve that.
     var displayImage: CGImage?
     var noteLEDs: [Int: Int] = [:]   // note (pads 68-99, steps 16-31) → palette index
+    var padDown: Set<Int> = []       // pads currently held under a finger (sweep feedback)
     var ccLEDs: [Int: Int] = [:]     // cc (tracks 40-43, buttons) → palette index / brightness
     var shiftHeld = false
     var status: String = "starting…"
