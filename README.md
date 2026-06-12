@@ -165,6 +165,12 @@ TARGET=iossim ./port-sf2.sh   # simulator slice of the same
 After staging extra modules, re-run `sync-runtime.sh` (per target) so they land in
 the simulator/device data root — `setup.sh` only stages the built-in set.
 
+Or just run **`./port-all.sh`**, which builds every `port-*.sh` for all targets and
+stages **both** the simulator data root and the device runtime tree. Syncing only
+one is the easy way to "not see new modules" on the other — a device build embeds
+`build/ios-runtime`, the simulator reads `build/ios-data`. After it finishes,
+**rebuild the app in Xcode** so the device runtime is re-embedded.
+
 ---
 
 ## Repo layout
