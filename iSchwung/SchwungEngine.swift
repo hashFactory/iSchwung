@@ -151,7 +151,13 @@ final class SchwungEngine {
     /// velocity 0 on release (the JS checks 0x90 + vel==0, not note-off).
     func sendTouch(_ note: Int, on: Bool) {
         schwung_send_internal_midi(0x90, UInt8(note), on ? 127 : 0)
-        if note == MoveMap.masterTouch { masterTouched = on }
+        if note == MoveMap.masterTouch {
+            masterTouched = on
+            // Shift + touch the volume knob → open the Tools menu (davebox etc.).
+            // Hardware uses Shift+Vol+JogClick; we drop the jog so it's a two-touch
+            // gesture. Latch Shift first (it toggles), then touch the volume knob.
+            if on && shiftHeld { jumpToTools() }
+        }
     }
 
     // MARK: - Settings summon gesture
@@ -161,21 +167,28 @@ final class SchwungEngine {
     // replaced the shim, so we reproduce both gestures here.
 
     private static let JUMP_TO_SETTINGS: UInt8 = 0x40
+    private static let JUMP_TO_TOOLS: UInt8 = 0x80
     private static let longPressDelay: TimeInterval = 0.5
     private var masterTouched = false
     private var jogPressToken: UUID?
     private var jogConsumed = false
 
-    /// Open Global Settings (used by both summon gestures and the gear button).
+    /// Open Global Settings (used by the long-press gesture and the gear button).
     func jumpToSettings() {
         schwung_set_ui_flags(Self.JUMP_TO_SETTINGS)
     }
 
-    /// Jog click pressed. Shift+Vol+Jog fires immediately; otherwise arm a
-    /// long-press timer that opens settings if the finger stays down.
+    /// Open the Tools menu — interactive overtake tools like davebox live here
+    /// (component_type "tool"; the JS runs them as overtake on select). Triggered
+    /// by Shift + volume-knob touch (see sendTouch).
+    func jumpToTools() {
+        schwung_set_ui_flags(Self.JUMP_TO_TOOLS)
+    }
+
+    /// Jog click pressed. Arm a long-press timer that opens Settings if the
+    /// finger stays down; a quick release is a normal jog click.
     func jogPressBegan() {
         jogConsumed = false
-        if shiftHeld && masterTouched { jumpToSettings(); jogConsumed = true; return }
         let token = UUID()
         jogPressToken = token
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.longPressDelay) { [weak self] in

@@ -123,7 +123,8 @@ struct MoveSurfaceView: View {
                         CCButton(engine: engine, cc: MoveMap.back, symbol: "chevron.left", size: 50)
                         CCButton(engine: engine, cc: MoveMap.menu, symbol: "line.3.horizontal", size: 50)
                     }
-                    // Long-pressing the jog or Shift+touch-master+jog open Settings too.
+                    // Settings: this gear, or a jog long-press. (Shift+touch the
+                    // volume knob opens the Tools menu — davebox etc.)
                     RoundButton(symbol: "gearshape.fill", size: 50, led: nil) {
                         engine.jumpToSettings()
                     }
